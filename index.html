@@ -1791,7 +1791,11 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
 
           linkBtn.addEventListener("click", function () {
             linkWidget.wrap.hidden = !linkWidget.wrap.hidden;
-            if (!linkWidget.wrap.hidden) { linkWidget.input.focus(); linkWidget.input.select(); }
+            if (!linkWidget.wrap.hidden) {
+              linkWidget.input.focus();
+              linkWidget.input.select();
+              linkWidget.input.dispatchEvent(new Event("input", { bubbles: true }));
+            }
           });
         }
 
