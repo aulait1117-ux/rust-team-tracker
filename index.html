@@ -49,6 +49,34 @@
 
   .wrap { max-width: 1240px; margin: 0 auto; padding: 0 20px 70px; }
 
+  /* ---------- lock gate ---------- */
+  #app-content { display: none; }
+  #app-content.unlocked { display: block; }
+
+  .lock-gate-backdrop {
+    position: fixed; inset: 0; background: var(--ink); z-index: 200;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .lock-gate-backdrop[hidden] { display: none; }
+  .lock-gate {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 26px 28px;
+    max-width: 360px; width: 100%; text-align: center;
+  }
+  .lock-gate h2 {
+    margin: 0 0 8px; font-family: var(--font-display); font-weight: 700; font-size: 17px;
+    text-transform: uppercase; letter-spacing: 0.04em; color: var(--text);
+  }
+  .lock-gate p { margin: 0 0 16px; font-size: 13px; color: var(--text-muted); }
+  .lock-gate-row { display: flex; gap: 8px; }
+  .lock-gate-row input[type="password"] {
+    flex: 1; background: var(--surface-raised); border: 1px solid var(--line); color: var(--text);
+    font-size: 14px; padding: 9px 10px; border-radius: 3px; text-align: center; letter-spacing: 0.2em;
+    font-family: var(--font-mono);
+  }
+  .lock-gate-row button { white-space: nowrap; }
+  .lock-gate-error { margin-top: 10px; font-size: 12.5px; color: var(--alert); }
+  .lock-gate-error[hidden] { display: none; }
+
   /* ---------- page header ---------- */
   .page-head { padding: 26px 0 4px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
   .page-head .eyebrow {
@@ -366,7 +394,7 @@
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="wrap" id="app-content">
   <header class="page-head">
     <div class="page-head-title">
       <span class="eyebrow">Rustoria.co · US Main · Vanilla 1x</span>
@@ -524,6 +552,18 @@
   </div>
 </div>
 
+<div class="lock-gate-backdrop" id="lock-gate-backdrop">
+  <div class="lock-gate">
+    <h2>🔒 ロック中</h2>
+    <p>パスワードを入力してください。</p>
+    <div class="lock-gate-row">
+      <input type="password" id="lock-gate-input" placeholder="パスワード" autocomplete="off" />
+      <button class="btn-ghost" id="lock-gate-submit-btn" type="button">解除</button>
+    </div>
+    <div class="lock-gate-error" id="lock-gate-error" hidden>違います</div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 
 <script type="module">
@@ -532,6 +572,50 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
 
 (function () {
   "use strict";
+
+  /* ---------- lock gate: simple deterrent, not real security ---------- */
+  (function wireLockGate() {
+    var LOCK_UNLOCKED_KEY = "rustoria-tracker-unlocked";
+    var LOCK_PASSWORD = "0611";
+
+    var backdrop = document.getElementById("lock-gate-backdrop");
+    var appContent = document.getElementById("app-content");
+    var input = document.getElementById("lock-gate-input");
+    var submitBtn = document.getElementById("lock-gate-submit-btn");
+    var errorEl = document.getElementById("lock-gate-error");
+
+    function unlock() {
+      try { localStorage.setItem(LOCK_UNLOCKED_KEY, "1"); } catch (e) { /* ignore */ }
+      if (backdrop) backdrop.hidden = true;
+      if (appContent) appContent.classList.add("unlocked");
+    }
+
+    var alreadyUnlocked = false;
+    try { alreadyUnlocked = localStorage.getItem(LOCK_UNLOCKED_KEY) === "1"; } catch (e) { alreadyUnlocked = false; }
+
+    if (alreadyUnlocked) {
+      unlock();
+      return;
+    }
+
+    function attemptUnlock() {
+      if (!input) return;
+      if (input.value === LOCK_PASSWORD) {
+        unlock();
+      } else {
+        input.value = "";
+        if (errorEl) errorEl.hidden = false;
+        input.focus();
+      }
+    }
+
+    if (submitBtn) submitBtn.addEventListener("click", attemptUnlock);
+    if (input) {
+      input.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); attemptUnlock(); } });
+      input.addEventListener("input", function () { if (errorEl) errorEl.hidden = true; });
+      input.focus();
+    }
+  })();
 
   var firebaseConfig = {
     apiKey: "AIzaSyA22qQTD-1v5QBNzd7TuVcf_l8hU5lWPvg",
