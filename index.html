@@ -708,7 +708,8 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
       parsed.teams.forEach(function (t) {
         if (t.type !== "friend" && t.type !== "enemy") t.type = "enemy";
         if (!Array.isArray(t.photos)) t.photos = [];
-        (t.members || []).forEach(function (m) {
+        if (!Array.isArray(t.members)) t.members = [];
+        t.members.forEach(function (m) {
           if (m.bmId == null) m.bmId = null;
           if (!Array.isArray(m.sessions)) m.sessions = [];
         });
@@ -769,7 +770,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     teamsState.teams = remoteTeams
       .filter(function (rt) { return rt && rt.id && rt.name; })
       .map(function (rt) {
-        var members = Array.isArray(rt.members) ? rt.members : [];
+        var members = normalizeRemoteTeamsValue(rt.members);
         return {
           id: rt.id,
           name: rt.name,
@@ -802,7 +803,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
         name: t.name,
         type: t.type === "friend" ? "friend" : "enemy",
         photos: Array.isArray(t.photos) ? t.photos : [],
-        members: t.members.map(function (m) {
+        members: (Array.isArray(t.members) ? t.members : []).map(function (m) {
           return { id: m.id, name: m.name, partial: !!m.partial, bmId: m.bmId || null, sessions: Array.isArray(m.sessions) ? m.sessions : [] };
         })
       };
@@ -822,20 +823,37 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     teamsDbRef = ref(db, "rooms/" + code + "/teams");
 
     var firstSnapshot = true;
+    var lastOnValueErrorToastAt = 0;
     teamsListenerUnsub = onValue(teamsDbRef, function (snapshot) {
-      var remoteTeams = normalizeRemoteTeamsValue(snapshot.val());
-      if (firstSnapshot) {
-        firstSnapshot = false;
-        if (seedIfEmpty && remoteTeams.length === 0 && teamsState.teams.length > 0) {
-          syncTeamsToFirebase();
-          renderTeamsList();
-          refreshTeamStatuses();
-          return;
+      // Defensive backstop: applyRemoteTeams()/renderTeamsList()/syncTeamsToFirebase() all parse
+      // and render data that may have an older/unexpected shape (synced from a client running a
+      // previous version of this file). onValue() does not surface a thrown error from this
+      // callback anywhere visible, so without this try/catch a single bad field would silently
+      // abort the whole callback -- including the refreshTeamStatuses() call at the end -- leaving
+      // every member's status stuck at "--" forever with no visible error except in devtools.
+      try {
+        var remoteTeams = normalizeRemoteTeamsValue(snapshot.val());
+        if (firstSnapshot) {
+          firstSnapshot = false;
+          if (seedIfEmpty && remoteTeams.length === 0 && teamsState.teams.length > 0) {
+            syncTeamsToFirebase();
+            renderTeamsList();
+            refreshTeamStatuses();
+            return;
+          }
         }
+        applyRemoteTeams(remoteTeams);
+        renderTeamsList();
+        refreshTeamStatuses();
+      } catch (err) {
+        console.error("onValue callback failed:", err);
+        if (Date.now() - lastOnValueErrorToastAt > 120000) {
+          toast("⚠ 同期データの読み込みで問題が発生した（オンライン状況の確認は継続する）");
+          lastOnValueErrorToastAt = Date.now();
+        }
+        // Guarantee the status poll keeps running even though rendering/parsing hit a snag above.
+        refreshTeamStatuses();
       }
-      applyRemoteTeams(remoteTeams);
-      renderTeamsList();
-      refreshTeamStatuses();
     }, function () {
       toast("⚠ クラウド接続に失敗した（ローカル保存のみで継続）");
     });
@@ -2194,6 +2212,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
         teamsState.teams.push(existingTeam);
         addedTeams++;
       }
+      if (!Array.isArray(existingTeam.members)) existingTeam.members = [];
       var existingLower = existingTeam.members.map(function (m) { return m.name.trim().toLowerCase(); });
       incomingMembers.forEach(function (im) {
         if (!im || typeof im.name !== "string") return;
