@@ -972,6 +972,15 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
       children.forEach(function (el, i) { el.classList.toggle("active", i === activeSuggestIndex); });
     }
 
+    function renderMessage(text) {
+      suggestBox.innerHTML = "";
+      var msgEl = document.createElement("div");
+      msgEl.className = "suggest-empty";
+      msgEl.textContent = text;
+      suggestBox.appendChild(msgEl);
+      suggestBox.hidden = false;
+    }
+
     function renderSuggestions(items) {
       suggestBox.innerHTML = "";
       suggestItems = items;
@@ -1011,16 +1020,21 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
       var query = input.value.trim();
       if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
       if (query.length < 2) { hide(); return; }
+      renderMessage("検索中…");
       searchDebounceTimer = setTimeout(function () {
         var mySeq = ++searchSeq;
         searchPlayers(query)
           .then(function (items) {
             if (mySeq !== searchSeq) return;
-            renderSuggestions(items);
+            try {
+              renderSuggestions(items);
+            } catch (renderErr) {
+              renderMessage("候補の表示に失敗した（そのまま追加できます）");
+            }
           })
           .catch(function () {
             if (mySeq !== searchSeq) return;
-            hide();
+            renderMessage("候補の取得に失敗した（そのまま追加できます）");
           });
       }, 400);
     });
