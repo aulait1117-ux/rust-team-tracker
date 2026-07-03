@@ -206,6 +206,41 @@
     padding: 1px 5px; border-radius: 3px; color: var(--text);
   }
 
+  /* ---------- trend modal (per-member login-time chart) ---------- */
+  .trend-modal-backdrop {
+    position: fixed; inset: 0; background: rgba(8,9,10,0.88); z-index: 130;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .trend-modal-backdrop[hidden] { display: none; }
+  .trend-modal {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 22px 24px;
+    max-width: 560px; width: 100%;
+  }
+  .trend-modal-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--line);
+  }
+  .trend-modal-head h2 {
+    margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 15px;
+    letter-spacing: 0.02em; color: var(--text);
+  }
+  .trend-chart-wrap { position: relative; line-height: 0; }
+  .trend-chart-wrap svg { display: block; width: 100%; height: auto; }
+  .trend-baseline { stroke: var(--line-soft); stroke-width: 1; }
+  .trend-hour-label { font-family: var(--font-mono); font-size: 9px; fill: var(--text-faint); }
+  .trend-bar { cursor: pointer; }
+  .trend-note {
+    margin-top: 12px; font-size: 12px; color: var(--text-faint); line-height: 1.5;
+  }
+  .trend-note[hidden] { display: none; }
+  .trend-tooltip {
+    position: fixed; z-index: 140; pointer-events: none;
+    background: var(--surface-raised); border: 1px solid var(--line); border-radius: 4px;
+    padding: 4px 8px; font-family: var(--font-mono); font-size: 11.5px; color: var(--text);
+    white-space: nowrap; box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+  }
+  .trend-tooltip[hidden] { display: none; }
+
   /* ---------- global summary bar ---------- */
   .global-bar {
     margin-top: 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
@@ -328,6 +363,12 @@
   }
   .link-id-btn:hover { color: var(--rust-bright); border-color: var(--rust); }
   .link-id-wrap { margin-top: 6px; }
+
+  .trend-btn {
+    flex: none; background: transparent; border: 1px solid var(--line); color: var(--text-faint);
+    font-size: 10.5px; padding: 3px 7px; border-radius: 3px; cursor: pointer; white-space: nowrap;
+  }
+  .trend-btn:hover { color: var(--rust-bright); border-color: var(--rust); }
 
   .last-seen { font-size: 10.5px; color: var(--text-faint); white-space: nowrap; flex: none; font-family: var(--font-mono); }
   .last-seen.is-empty { display: none; }
@@ -487,6 +528,18 @@
   <img id="photo-modal-img" src="" alt="拠点写真拡大表示" />
   <button class="btn-ghost" id="photo-modal-close-btn" type="button">✕ 閉じる</button>
 </div>
+
+<div class="trend-modal-backdrop" id="trend-modal-backdrop" hidden>
+  <div class="trend-modal">
+    <div class="trend-modal-head">
+      <h2 id="trend-modal-title">ログイン傾向（時間帯別）</h2>
+      <button class="btn-ghost" id="trend-modal-close-btn" type="button">✕ 閉じる</button>
+    </div>
+    <div class="trend-chart-wrap" id="trend-chart-wrap"></div>
+    <div class="trend-note" id="trend-note" hidden></div>
+  </div>
+</div>
+<div class="trend-tooltip" id="trend-tooltip" hidden></div>
 
 <div class="help-modal-backdrop" id="help-modal-backdrop" hidden>
   <div class="help-modal">
@@ -649,6 +702,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
         if (!Array.isArray(t.photos)) t.photos = [];
         (t.members || []).forEach(function (m) {
           if (m.bmId == null) m.bmId = null;
+          if (!Array.isArray(m.sessions)) m.sessions = [];
         });
       });
       return parsed;
@@ -722,6 +776,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
                 name: rm.name,
                 partial: !!rm.partial,
                 bmId: rm.bmId || null,
+                sessions: Array.isArray(rm.sessions) ? rm.sessions : [],
                 online: localMember ? (localMember.online === true || localMember.online === false ? localMember.online : null) : null,
                 lastOnlineAt: localMember ? (localMember.lastOnlineAt || null) : null
               };
@@ -740,7 +795,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
         type: t.type === "friend" ? "friend" : "enemy",
         photos: Array.isArray(t.photos) ? t.photos : [],
         members: t.members.map(function (m) {
-          return { id: m.id, name: m.name, partial: !!m.partial, bmId: m.bmId || null };
+          return { id: m.id, name: m.name, partial: !!m.partial, bmId: m.bmId || null, sessions: Array.isArray(m.sessions) ? m.sessions : [] };
         })
       };
     });
@@ -1435,6 +1490,131 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     return section;
   }
 
+  /* ---------- login trend modal: hour-of-day session chart ---------- */
+  var SVG_NS = "http://www.w3.org/2000/svg";
+  var TREND_SPARSE_HOURS = [0, 3, 6, 9, 12, 15, 18, 21];
+
+  function computeHourlyBuckets(sessions) {
+    var buckets = new Array(24).fill(0);
+    (sessions || []).forEach(function (s) {
+      if (!s || typeof s.start !== "number") return;
+      var hour = new Date(s.start).getHours();
+      buckets[hour]++;
+    });
+    return buckets;
+  }
+
+  function resolveTeamAccentColor(teamType) {
+    var varName = teamType === "friend" ? "--moss" : "--alert";
+    var val = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+    return val || (teamType === "friend" ? "#6ea15a" : "#c94f3f");
+  }
+
+  function showTrendTooltip(clientX, clientY, hour, count) {
+    var tip = document.getElementById("trend-tooltip");
+    if (!tip) return;
+    tip.textContent = hour + "時台：" + count + "回観測";
+    tip.style.left = (clientX + 14) + "px";
+    tip.style.top = (clientY + 14) + "px";
+    tip.hidden = false;
+  }
+  function hideTrendTooltip() {
+    var tip = document.getElementById("trend-tooltip");
+    if (tip) tip.hidden = true;
+  }
+
+  function attachTrendBarHover(rect, hour, count) {
+    rect.addEventListener("mousemove", function (e) { showTrendTooltip(e.clientX, e.clientY, hour, count); });
+    rect.addEventListener("mouseleave", hideTrendTooltip);
+  }
+
+  function buildTrendChartSvg(buckets, color) {
+    var width = 480, barAreaHeight = 110, topPad = 10, labelHeight = 26;
+    var height = topPad + barAreaHeight + labelHeight;
+    var barSlot = width / 24;
+    var barWidth = Math.max(2, barSlot - 6);
+    var baselineY = topPad + barAreaHeight;
+    var maxCount = Math.max.apply(null, buckets.concat([1]));
+
+    var svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+    svg.setAttribute("width", "100%");
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", "時間帯別ログイン回数の棒グラフ");
+
+    var baseline = document.createElementNS(SVG_NS, "line");
+    baseline.setAttribute("class", "trend-baseline");
+    baseline.setAttribute("x1", "0");
+    baseline.setAttribute("y1", String(baselineY));
+    baseline.setAttribute("x2", String(width));
+    baseline.setAttribute("y2", String(baselineY));
+    svg.appendChild(baseline);
+
+    for (var hour = 0; hour < 24; hour++) {
+      var count = buckets[hour] || 0;
+      var barHeight = maxCount > 0 ? (count / maxCount) * barAreaHeight : 0;
+      var x = hour * barSlot + (barSlot - barWidth) / 2;
+      var y = baselineY - barHeight;
+      var rect = document.createElementNS(SVG_NS, "rect");
+      rect.setAttribute("class", "trend-bar");
+      rect.setAttribute("data-hour", String(hour));
+      rect.setAttribute("data-count", String(count));
+      rect.setAttribute("x", String(x));
+      rect.setAttribute("y", String(y));
+      rect.setAttribute("width", String(barWidth));
+      rect.setAttribute("height", String(barHeight));
+      rect.setAttribute("rx", "2");
+      rect.setAttribute("fill", color);
+      attachTrendBarHover(rect, hour, count);
+      svg.appendChild(rect);
+
+      if (TREND_SPARSE_HOURS.indexOf(hour) !== -1) {
+        var label = document.createElementNS(SVG_NS, "text");
+        label.setAttribute("class", "trend-hour-label");
+        label.setAttribute("x", String(hour * barSlot + barSlot / 2));
+        label.setAttribute("y", String(baselineY + 16));
+        label.setAttribute("text-anchor", "middle");
+        label.textContent = String(hour);
+        svg.appendChild(label);
+      }
+    }
+
+    return svg;
+  }
+
+  function openTrendModal(member, team) {
+    var backdrop = document.getElementById("trend-modal-backdrop");
+    var titleEl = document.getElementById("trend-modal-title");
+    var chartWrap = document.getElementById("trend-chart-wrap");
+    var noteEl = document.getElementById("trend-note");
+    if (!backdrop || !titleEl || !chartWrap || !noteEl) return;
+
+    var sessions = Array.isArray(member.sessions) ? member.sessions : [];
+    var buckets = computeHourlyBuckets(sessions);
+    var color = resolveTeamAccentColor(team.type);
+
+    titleEl.textContent = member.name + "さんのログイン傾向（時間帯別）";
+    chartWrap.innerHTML = "";
+    chartWrap.appendChild(buildTrendChartSvg(buckets, color));
+
+    if (sessions.length < 5) {
+      noteEl.textContent = "まだデータが少ない（観測 " + sessions.length + "件）。時間が経つほど傾向が見えてくる。";
+      noteEl.hidden = false;
+    } else {
+      noteEl.textContent = "";
+      noteEl.hidden = true;
+    }
+
+    backdrop.hidden = false;
+  }
+
+  (function wireTrendModal() {
+    var backdrop = document.getElementById("trend-modal-backdrop");
+    var closeBtn = document.getElementById("trend-modal-close-btn");
+    if (closeBtn) closeBtn.addEventListener("click", function () { backdrop.hidden = true; hideTrendTooltip(); });
+    if (backdrop) backdrop.addEventListener("click", function (e) { if (e.target === backdrop) { backdrop.hidden = true; hideTrendTooltip(); } });
+  })();
+
   function renderTeamsList() {
     var container = document.getElementById("teams-cards");
     var active = document.activeElement;
@@ -1568,6 +1748,13 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
         lastSeenEl.className = "last-seen";
         updateLastSeenEl(lastSeenEl, member);
 
+        var trendBtn = document.createElement("button");
+        trendBtn.type = "button";
+        trendBtn.className = "trend-btn";
+        trendBtn.textContent = "📊 傾向を見る";
+        trendBtn.setAttribute("aria-label", member.name + " のログイン傾向を見る");
+        trendBtn.addEventListener("click", function () { openTrendModal(member, team); });
+
         var linkBtn = null;
         var linkWidget = null;
         if (!member.bmId) {
@@ -1612,6 +1799,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
         row.appendChild(partialLabel);
         row.appendChild(pill);
         row.appendChild(lastSeenEl);
+        row.appendChild(trendBtn);
         if (linkBtn) row.appendChild(linkBtn);
         row.appendChild(delMemberBtn);
         memberWrap.appendChild(row);
@@ -1622,7 +1810,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
       card.appendChild(membersWrap);
 
       function addMemberWithName(name, bmId) {
-        team.members.push({ id: makeId("member"), name: name, partial: false, online: null, lastOnlineAt: null, bmId: bmId || null });
+        team.members.push({ id: makeId("member"), name: name, partial: false, online: null, lastOnlineAt: null, bmId: bmId || null, sessions: [] });
         saveTeamsState();
         renderTeamsList();
         refreshTeamStatuses();
@@ -1655,7 +1843,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
           var lower = name.toLowerCase();
           if (existingLower.indexOf(lower) !== -1) return;
           existingLower.push(lower);
-          team.members.push({ id: makeId("member"), name: name, partial: false, online: null, lastOnlineAt: null, bmId: null });
+          team.members.push({ id: makeId("member"), name: name, partial: false, online: null, lastOnlineAt: null, bmId: null, sessions: [] });
           addedCount++;
         });
         bulkTextarea.value = "";
@@ -1763,6 +1951,16 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
       });
   }
 
+  /* ---------- session history: login trend tracking ---------- */
+  var SESSION_MAX_AGE_MS = 60 * 24 * 60 * 60 * 1000; // 60 days
+  var SESSION_MAX_COUNT = 200;
+  function trimSessions(sessions) {
+    var cutoff = Date.now() - SESSION_MAX_AGE_MS;
+    var filtered = (sessions || []).filter(function (s) { return s && typeof s.start === "number" && s.start >= cutoff; });
+    if (filtered.length > SESSION_MAX_COUNT) filtered = filtered.slice(-SESSION_MAX_COUNT);
+    return filtered;
+  }
+
   function refreshTeamStatuses() {
     var totalMembers = teamsState.teams.reduce(function (sum, t) { return sum + t.members.length; }, 0);
     if (totalMembers === 0) {
@@ -1779,6 +1977,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
         var onlineIdNames = new Map();
         entries.forEach(function (e) { if (e.id) onlineIdNames.set(e.id, e.name); });
         var transitions = [];
+        var sessionsChanged = false;
         teamsState.teams.forEach(function (team) {
           team.members.forEach(function (member) {
             var wasOnline = member.online;
@@ -1800,12 +1999,29 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
             }
             member.online = isOnline;
             if (isOnline) member.lastOnlineAt = Date.now();
+            if (!Array.isArray(member.sessions)) member.sessions = [];
+            if (wasOnline !== true && isOnline === true) {
+              // OFF/未知 -> ON。他デバイスが既に記録済み（未クローズのセッションが残っている）ならスキップして重複記録を防ぐ
+              var hasUnclosedSession = member.sessions.length > 0 && member.sessions[member.sessions.length - 1].end === null;
+              if (!hasUnclosedSession) {
+                member.sessions.push({ start: Date.now(), end: null });
+                member.sessions = trimSessions(member.sessions);
+                sessionsChanged = true;
+              }
+            } else if (wasOnline === true && isOnline === false) {
+              var lastSession = member.sessions.length > 0 ? member.sessions[member.sessions.length - 1] : null;
+              if (lastSession && lastSession.end === null) {
+                lastSession.end = Date.now();
+                sessionsChanged = true;
+              }
+            }
             if (wasOnline === false && isOnline === true) {
               transitions.push({ teamName: team.name, memberName: member.name, teamType: team.type });
             }
           });
         });
         saveTeamsLocalOnly(); // online/lastOnlineAt is derived locally per-client; no need to push to Firebase every poll
+        if (sessionsChanged) syncTeamsToFirebase(); // session history is shared roster data, unlike online/lastOnlineAt
         teamsLastChecked = Date.now();
         updateTeamsLastChecked();
         updateTeamStatusPills();
@@ -1889,7 +2105,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
         var lower = im.name.trim().toLowerCase();
         if (!lower || existingLower.indexOf(lower) !== -1) return;
         existingLower.push(lower);
-        existingTeam.members.push({ id: makeId("member"), name: im.name.trim(), partial: !!im.partial, online: null, lastOnlineAt: null, bmId: im.bmId || null });
+        existingTeam.members.push({ id: makeId("member"), name: im.name.trim(), partial: !!im.partial, online: null, lastOnlineAt: null, bmId: im.bmId || null, sessions: [] });
         addedMembers++;
       });
     });
