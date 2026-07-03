@@ -293,6 +293,14 @@
   .badge.team-count { color: var(--text-muted); }
   .badge.team-count.has-online { color: var(--moss); }
 
+  .reorder-btn {
+    flex: none; width: 22px; height: 22px; display: grid; place-items: center; background: transparent;
+    border: 1px solid var(--line); color: var(--text-faint); cursor: pointer; border-radius: 3px;
+    font-size: 10px; line-height: 1; padding: 0;
+  }
+  .reorder-btn:hover:not(:disabled) { color: var(--rust-bright); border-color: var(--rust); }
+  .reorder-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
   .members { display: flex; flex-direction: column; }
   .member-wrap { border-top: 1px solid var(--line-soft); }
   .member-wrap:first-child { border-top: none; }
@@ -1687,6 +1695,38 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
       countBadge.className = "badge team-count" + (onlineCount > 0 ? " has-online" : "");
       countBadge.textContent = onlineCount + "/" + team.members.length + " IN";
 
+      var teamIdx = teamsState.teams.indexOf(team);
+
+      var moveUpBtn = document.createElement("button");
+      moveUpBtn.className = "reorder-btn"; moveUpBtn.type = "button";
+      moveUpBtn.setAttribute("aria-label", team.name + " を上に移動");
+      moveUpBtn.textContent = "▲";
+      moveUpBtn.disabled = teamIdx <= 0;
+      moveUpBtn.addEventListener("click", function () {
+        var idx = teamsState.teams.indexOf(team);
+        if (idx <= 0) return;
+        var tmp = teamsState.teams[idx - 1];
+        teamsState.teams[idx - 1] = teamsState.teams[idx];
+        teamsState.teams[idx] = tmp;
+        saveTeamsState();
+        renderTeamsList();
+      });
+
+      var moveDownBtn = document.createElement("button");
+      moveDownBtn.className = "reorder-btn"; moveDownBtn.type = "button";
+      moveDownBtn.setAttribute("aria-label", team.name + " を下に移動");
+      moveDownBtn.textContent = "▼";
+      moveDownBtn.disabled = teamIdx >= teamsState.teams.length - 1;
+      moveDownBtn.addEventListener("click", function () {
+        var idx = teamsState.teams.indexOf(team);
+        if (idx < 0 || idx >= teamsState.teams.length - 1) return;
+        var tmp = teamsState.teams[idx + 1];
+        teamsState.teams[idx + 1] = teamsState.teams[idx];
+        teamsState.teams[idx] = tmp;
+        saveTeamsState();
+        renderTeamsList();
+      });
+
       var delTeamBtn = document.createElement("button");
       delTeamBtn.className = "del"; delTeamBtn.type = "button";
       delTeamBtn.setAttribute("aria-label", team.name + " チームを削除");
@@ -1701,6 +1741,8 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
       top.appendChild(nameInput);
       top.appendChild(typeBtn);
       top.appendChild(countBadge);
+      top.appendChild(moveUpBtn);
+      top.appendChild(moveDownBtn);
       top.appendChild(delTeamBtn);
       card.appendChild(top);
 
