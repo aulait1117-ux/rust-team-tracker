@@ -889,6 +889,16 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
   /* ---------- team watch: enemy team monitor ---------- */
   var teamsLastChecked = null;
   var lastKnownOnlineNamesLower = [];
+  var lastFetchFailToastAt = 0;
+  var lastFetchWas429 = false;
+  var teamsRefreshTimer = null;
+
+  function scheduleNextTeamsRefresh() {
+    if (teamsRefreshTimer) clearTimeout(teamsRefreshTimer);
+    var delay = lastFetchWas429 ? 75000 : 45000; // one-shot +30s after a 429, then back to normal
+    lastFetchWas429 = false;
+    teamsRefreshTimer = setTimeout(refreshTeamStatuses, delay);
+  }
 
   function updateTeamsLastChecked() {
     var el = document.getElementById("teams-last-checked");
@@ -1926,7 +1936,10 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
 
   function fetchOnlinePlayerPage(url, entries, pageNum, maxPages) {
     return fetch(url, { cache: "no-store" })
-      .then(function (res) { if (!res.ok) throw new Error("bad status " + res.status); return res.json(); })
+      .then(function (res) {
+        if (!res.ok) { var err = new Error("bad status " + res.status); err.status = res.status; throw err; }
+        return res.json();
+      })
       .then(function (data) {
         (data.data || []).forEach(function (p) {
           if (p && p.attributes && p.attributes.name) {
@@ -1968,6 +1981,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
       updateTeamsLastChecked();
       updateGlobalBar();
       updateTabTitle();
+      scheduleNextTeamsRefresh();
       return;
     }
     fetchOnlinePlayerPage(BM_PLAYERS_API, [], 1, 8)
@@ -2034,9 +2048,17 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
             t.teamName + " - " + t.memberName + " がオンラインになった"
           );
         });
+        lastFetchWas429 = false;
       })
-      .catch(function () {
-        toast("⚠ 敵チーム監視：オンライン名簿の取得に失敗した（前回のステータスを保持）");
+      .catch(function (err) {
+        lastFetchWas429 = !!(err && err.status === 429);
+        if (Date.now() - lastFetchFailToastAt > 120000) {
+          toast("⚠ 敵チーム監視：オンライン名簿の取得に失敗した（前回のステータスを保持）");
+          lastFetchFailToastAt = Date.now();
+        }
+      })
+      .then(function () {
+        scheduleNextTeamsRefresh();
       });
   }
 
@@ -2161,7 +2183,6 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
   renderTeamsList();
   updateTeamsLastChecked();
   refreshTeamStatuses();
-  setInterval(refreshTeamStatuses, 30000);
 
   var savedRoomCode = getSavedRoomCode();
   if (savedRoomCode) {
