@@ -1799,6 +1799,21 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
           });
         }
 
+        var unlinkBtn = null;
+        if (member.bmId) {
+          unlinkBtn = document.createElement("button");
+          unlinkBtn.type = "button";
+          unlinkBtn.className = "link-id-btn";
+          unlinkBtn.textContent = "🔁 IDリンクを解除してやり直す";
+          unlinkBtn.setAttribute("aria-label", member.name + " のBattleMetrics ID紐付けを解除");
+          unlinkBtn.addEventListener("click", function () {
+            member.bmId = null;
+            saveTeamsState();
+            renderTeamsList();
+            toast("🔁 " + member.name + " のIDの紐付けを解除した。再度検索して紐付けし直せる。");
+          });
+        }
+
         var delMemberBtn = document.createElement("button");
         delMemberBtn.className = "del"; delMemberBtn.type = "button";
         delMemberBtn.setAttribute("aria-label", member.name + " を削除");
@@ -1815,6 +1830,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
         row.appendChild(lastSeenEl);
         row.appendChild(trendBtn);
         if (linkBtn) row.appendChild(linkBtn);
+        if (unlinkBtn) row.appendChild(unlinkBtn);
         row.appendChild(delMemberBtn);
         memberWrap.appendChild(row);
         if (linkWidget) memberWrap.appendChild(linkWidget.wrap);
@@ -1993,7 +2009,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
         var lowerNames = entries.map(function (e) { return e.name.trim().toLowerCase(); });
         lastKnownOnlineNamesLower = lowerNames;
         var onlineIdNames = new Map();
-        entries.forEach(function (e) { if (e.id) onlineIdNames.set(e.id, e.name); });
+        entries.forEach(function (e) { if (e.id) onlineIdNames.set(String(e.id), e.name); });
         var transitions = [];
         var sessionsChanged = false;
         teamsState.teams.forEach(function (team) {
@@ -2002,10 +2018,21 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
             var isOnline = false;
             if (member.bmId) {
               // ID一致は改名されても追跡できる。partial設定は無視して常に完全一致的に扱う
-              isOnline = onlineIdNames.has(member.bmId);
+              // 保存データが古い経路等でnumber型のbmIdを持っている可能性があるため、比較前に必ずStringへ揃える
+              var bmIdStr = String(member.bmId);
+              isOnline = onlineIdNames.has(bmIdStr);
               if (isOnline) {
-                var liveName = onlineIdNames.get(member.bmId);
+                var liveName = onlineIdNames.get(bmIdStr);
                 if (liveName && liveName !== member.name) member.name = liveName;
+              } else {
+                // ID一致が取れない（stale/不一致なbmId等）場合は名前照合でも救済する。
+                // ここでの一致は名前ベースのため改名追従（member.nameの上書き）は行わない
+                var mNameFallback = member.name.trim().toLowerCase();
+                if (mNameFallback) {
+                  isOnline = member.partial
+                    ? lowerNames.some(function (n) { return n.indexOf(mNameFallback) !== -1; })
+                    : lowerNames.indexOf(mNameFallback) !== -1;
+                }
               }
             } else {
               var mName = member.name.trim().toLowerCase();
