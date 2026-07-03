@@ -1,0 +1,1862 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rustoria US Main – 敵チーム監視</title>
+<style>
+  :root {
+    --ink: #101315;
+    --surface: #1a1e21;
+    --surface-raised: #21262a;
+    --line: #33393d;
+    --line-soft: #262b2e;
+    --text: #eae6df;
+    --text-muted: #9ba0a4;
+    --text-faint: #676c70;
+    --rust: #c8622f;
+    --rust-bright: #e2793f;
+    --moss: #6ea15a;
+    --amber: #d9a441;
+    --alert: #c94f3f;
+    --tier-high: #d1573f;
+    --tier-mid: #d9a441;
+    --tier-low: #6f8f8a;
+    --tier-hot: #b6893a;
+
+    --font-display: "Bahnschrift SemiBold", "Segoe UI Semibold", "Arial Narrow", sans-serif;
+    --font-body: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", sans-serif;
+    --font-mono: "Cascadia Mono", "Consolas", "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--ink);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  body {
+    background-image:
+      radial-gradient(ellipse 1000px 560px at 12% -8%, rgba(200, 98, 47, 0.09), transparent 58%),
+      radial-gradient(ellipse 800px 460px at 100% 0%, rgba(110, 161, 90, 0.05), transparent 55%),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px);
+  }
+  a { color: var(--rust-bright); }
+  button { font-family: inherit; }
+  :focus-visible { outline: 2px solid var(--rust-bright); outline-offset: 2px; }
+
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 0 20px 70px; }
+
+  /* ---------- page header ---------- */
+  .page-head { padding: 26px 0 4px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .page-head .eyebrow {
+    display: block; margin-bottom: 4px;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.13em;
+    text-transform: uppercase; color: var(--rust-bright);
+  }
+  .page-head h1 {
+    margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 22px;
+    letter-spacing: 0.02em; text-transform: uppercase; text-wrap: balance;
+  }
+
+  /* ---------- shared bits (reused by team watch) ---------- */
+  .hero-meta { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--text-muted); }
+  .hero-meta b { color: var(--text); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .hero-actions { display: flex; gap: 8px; }
+  .btn-ghost {
+    background: transparent; border: 1px solid var(--line); color: var(--text-muted);
+    font-size: 12.5px; padding: 7px 12px; border-radius: 3px; cursor: pointer; text-decoration: none;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-ghost:hover { border-color: var(--rust); color: var(--rust-bright); }
+
+  .add-row { display: flex; gap: 8px; margin-bottom: 14px; }
+  .add-row input[type="text"] {
+    flex: 1; background: var(--surface); border: 1px solid var(--line); color: var(--text);
+    font-size: 13px; padding: 8px 10px; border-radius: 3px;
+  }
+  .add-row input[type="text"]::placeholder { color: var(--text-faint); }
+  .add-row button {
+    background: var(--surface-raised); border: 1px solid var(--line); color: var(--text-muted);
+    font-size: 13px; padding: 8px 14px; border-radius: 3px; cursor: pointer; white-space: nowrap;
+  }
+  .add-row button:hover { color: var(--rust-bright); border-color: var(--rust); }
+  .add-row select {
+    background: var(--surface); border: 1px solid var(--line); color: var(--text);
+    font-size: 13px; padding: 8px 10px; border-radius: 3px;
+  }
+
+  .share-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .share-import-box { display: flex; gap: 8px; margin-bottom: 14px; align-items: flex-start; }
+  .share-import-box[hidden] { display: none; }
+  .share-import-box textarea {
+    flex: 1; min-height: 60px; background: var(--surface-raised); border: 1px solid var(--line); color: var(--text);
+    font-family: var(--font-mono); font-size: 12px; padding: 8px 10px; border-radius: 3px; resize: vertical;
+  }
+  .share-import-box textarea::placeholder { color: var(--text-faint); }
+
+  .empty-note { color: var(--text-faint); font-size: 12.5px; padding: 10px 2px; }
+
+  .badge {
+    flex: none; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em;
+    padding: 2px 6px; border-radius: 3px; border: 1px solid currentColor; text-transform: uppercase;
+  }
+
+  .del {
+    flex: none; width: 22px; height: 22px; display: grid; place-items: center; background: transparent;
+    border: none; color: var(--text-faint); cursor: pointer; border-radius: 3px; font-size: 15px; line-height: 1;
+  }
+  .del:hover { color: var(--alert); }
+
+  .toggle-btn {
+    background: var(--surface-raised); border: 1px solid var(--line); color: var(--text-muted);
+    font-size: 12.5px; padding: 7px 12px; border-radius: 3px; cursor: pointer;
+  }
+  .toggle-btn[aria-pressed="true"] { border-color: var(--rust); color: var(--rust-bright); background: rgba(200,98,47,0.08); }
+
+  /* ---------- room (Firebase realtime sync) ---------- */
+  .room-bar {
+    margin-top: 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    padding: 10px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px;
+  }
+  .room-bar-status { font-family: var(--font-mono); font-size: 13px; color: var(--text-muted); }
+  .room-bar-status b { color: var(--rust-bright); letter-spacing: 0.1em; }
+  .room-bar-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .room-modal-backdrop {
+    position: fixed; inset: 0; background: rgba(8,9,10,0.88); z-index: 110;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .room-modal-backdrop[hidden] { display: none; }
+  .room-modal {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 24px;
+    max-width: 440px; width: 100%;
+  }
+  .room-modal h2 {
+    margin: 0 0 10px; font-family: var(--font-display); font-size: 16px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.04em; color: var(--text);
+  }
+  .room-modal p { margin: 0 0 16px; font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+  .room-modal-row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .room-modal-row input[type="text"] {
+    flex: 1; background: var(--surface-raised); border: 1px solid var(--line); color: var(--text);
+    font-size: 13px; padding: 8px 10px; border-radius: 3px; text-transform: uppercase; font-family: var(--font-mono);
+  }
+  .room-modal-row button { white-space: nowrap; }
+  .room-modal-divider { text-align: center; font-size: 11px; color: var(--text-faint); margin: 12px 0; }
+
+  /* ---------- help modal ---------- */
+  .help-modal-backdrop {
+    position: fixed; inset: 0; background: rgba(8,9,10,0.88); z-index: 130;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .help-modal-backdrop[hidden] { display: none; }
+  .help-modal {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 22px 24px;
+    max-width: 560px; width: 100%; max-height: 82vh; overflow-y: auto;
+  }
+  .help-modal-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--line);
+  }
+  .help-modal-head h2 {
+    margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 16px;
+    text-transform: uppercase; letter-spacing: 0.04em; color: var(--text);
+  }
+  .help-modal-body section { margin-bottom: 16px; }
+  .help-modal-body section:last-child { margin-bottom: 0; }
+  .help-modal-body h3 {
+    margin: 0 0 6px; font-family: var(--font-display); font-weight: 700; font-size: 12.5px;
+    letter-spacing: 0.05em; text-transform: uppercase; color: var(--rust-bright);
+  }
+  .help-modal-body ul { margin: 0; padding-left: 18px; }
+  .help-modal-body li { font-size: 13px; color: var(--text-muted); line-height: 1.6; margin-bottom: 4px; }
+  .help-modal-body code {
+    font-family: var(--font-mono); font-size: 12px; background: var(--surface-raised);
+    padding: 1px 5px; border-radius: 3px; color: var(--text);
+  }
+
+  /* ---------- global summary bar ---------- */
+  .global-bar {
+    margin-top: 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    padding: 10px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px;
+  }
+  .global-bar-status { font-family: var(--font-mono); font-size: 13px; color: var(--text-muted); }
+  .global-bar-status b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .global-bar.has-online { border-color: var(--alert); }
+  .global-bar.has-online .global-bar-status { color: var(--alert); }
+  .global-bar.has-online .global-bar-status b { color: var(--alert); }
+  .global-bar-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* ---------- team watch: enemy team monitor ---------- */
+  .teams-section { margin-top: 30px; }
+  .teams-topbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px 20px; flex-wrap: wrap;
+    padding-bottom: 10px; border-bottom: 1px solid var(--line); margin-bottom: 14px;
+  }
+  .teams-topbar h2 {
+    margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 14.5px;
+    letter-spacing: 0.07em; text-transform: uppercase; display: flex; align-items: center; gap: 10px;
+  }
+  .teams-topbar .icon { width: 19px; height: 19px; flex: none; color: var(--rust-bright); }
+
+  .teams-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .teams-grid { grid-template-columns: 1fr; } }
+
+  .team-card {
+    background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--line);
+    border-radius: 4px; padding: 12px 14px 13px;
+  }
+  .team-card[data-team-type="friend"] { border-left-color: var(--moss); }
+  .team-card[data-team-type="enemy"] { border-left-color: var(--alert); }
+  .team-card-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .type-toggle {
+    flex: none; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.03em;
+    padding: 3px 8px; border-radius: 3px; border: 1px solid currentColor; cursor: pointer;
+    background: transparent; text-transform: uppercase;
+  }
+  .type-toggle.enemy { color: var(--alert); }
+  .type-toggle.friend { color: var(--moss); }
+  .team-card-top input[type="text"] {
+    flex: 1; min-width: 90px; background: transparent; border: 1px solid transparent; color: var(--text);
+    font-family: var(--font-display); font-size: 14px; font-weight: 700; letter-spacing: 0.02em;
+    padding: 3px 5px; border-radius: 3px;
+  }
+  .team-card-top input[type="text"]:hover { border-color: var(--line); }
+  .team-card-top input[type="text"]:focus-visible { outline: 2px solid var(--rust-bright); outline-offset: 1px; border-color: transparent; }
+
+  .badge.team-count { color: var(--text-muted); }
+  .badge.team-count.has-online { color: var(--moss); }
+
+  .members { display: flex; flex-direction: column; }
+  .member-wrap { border-top: 1px solid var(--line-soft); }
+  .member-wrap:first-child { border-top: none; }
+  .member-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; flex-wrap: wrap; }
+  .member-row input[type="text"] {
+    flex: 1; min-width: 100px; background: var(--surface-raised); border: 1px solid var(--line); color: var(--text);
+    font-size: 13px; padding: 6px 8px; border-radius: 3px;
+  }
+  .member-partial { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-faint); white-space: nowrap; flex: none; }
+  .status-pill {
+    flex: none; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.03em;
+    padding: 3px 9px; border-radius: 12px; border: 1px solid var(--line); color: var(--text-faint); white-space: nowrap;
+  }
+  .status-pill.online { color: var(--moss); border-color: var(--moss); background: rgba(110,161,90,0.08); }
+  .status-pill.offline { color: var(--text-faint); border-color: var(--line); }
+
+  .member-add-row { display: flex; gap: 8px; margin-top: 10px; }
+  .member-add-row input[type="text"] {
+    flex: 1; background: var(--surface-raised); border: 1px solid var(--line); color: var(--text);
+    font-size: 13px; padding: 7px 9px; border-radius: 3px;
+  }
+  .member-add-row input[type="text"]::placeholder { color: var(--text-faint); }
+  .member-add-row button {
+    background: var(--surface-raised); border: 1px solid var(--line); color: var(--text-muted);
+    font-size: 12.5px; padding: 7px 12px; border-radius: 3px; cursor: pointer; white-space: nowrap;
+  }
+  .member-add-row button:hover { color: var(--rust-bright); border-color: var(--rust); }
+
+  .member-add-wrap { position: relative; }
+  .suggest-box {
+    position: absolute; left: 0; right: 0; top: 100%; margin-top: 4px; z-index: 30;
+    background: var(--surface-raised); border: 1px solid var(--line); border-radius: 4px;
+    box-shadow: 0 10px 24px rgba(0,0,0,0.45); max-height: 220px; overflow-y: auto;
+  }
+  .suggest-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 7px 10px; font-size: 13px; color: var(--text); cursor: pointer;
+  }
+  .suggest-item:hover, .suggest-item.active { background: rgba(226, 121, 63, 0.14); }
+  .suggest-item .suggest-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .suggest-item .suggest-online {
+    flex: none; font-family: var(--font-mono); font-size: 10px; color: var(--moss);
+    border: 1px solid var(--moss); border-radius: 3px; padding: 1px 5px;
+  }
+  .suggest-empty { padding: 8px 10px; font-size: 12px; color: var(--text-faint); }
+
+  /* ---------- OCR: screenshot -> name ---------- */
+  .ocr-section { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line-soft); }
+  .ocr-panel { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .ocr-panel[hidden] { display: none; }
+  .ocr-input-row { display: flex; gap: 8px; align-items: flex-start; }
+  .ocr-input-row .paste-zone { flex: 1; margin-bottom: 0; }
+  .ocr-input-row input[type="file"] { font-size: 11px; color: var(--text-faint); max-width: 130px; }
+  .ocr-canvas-wrap { position: relative; border: 1px solid var(--line); border-radius: 4px; background: #000; }
+  .ocr-canvas-wrap[hidden] { display: none; }
+  .ocr-canvas-wrap canvas { display: block; width: 100%; height: auto; cursor: crosshair; }
+  .ocr-select-box {
+    position: absolute; display: none; border: 1px solid var(--rust-bright);
+    background: rgba(226, 121, 63, 0.25); pointer-events: none;
+  }
+  .ocr-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .ocr-actions[hidden] { display: none; }
+  .ocr-status { font-size: 11.5px; color: var(--text-faint); }
+
+  .link-id-btn {
+    flex: none; background: transparent; border: 1px solid var(--line); color: var(--text-faint);
+    font-size: 10.5px; padding: 3px 7px; border-radius: 3px; cursor: pointer; white-space: nowrap;
+  }
+  .link-id-btn:hover { color: var(--rust-bright); border-color: var(--rust); }
+  .link-id-wrap { margin-top: 6px; }
+
+  .last-seen { font-size: 10.5px; color: var(--text-faint); white-space: nowrap; flex: none; font-family: var(--font-mono); }
+  .last-seen.is-empty { display: none; }
+
+  .bulk-add-row { display: flex; gap: 8px; margin-top: 8px; align-items: flex-start; }
+  .bulk-add-row textarea {
+    flex: 1; min-height: 40px; background: var(--surface-raised); border: 1px solid var(--line); color: var(--text);
+    font-family: inherit; font-size: 12.5px; padding: 7px 9px; border-radius: 3px; resize: vertical;
+  }
+  .bulk-add-row textarea::placeholder { color: var(--text-faint); }
+  .bulk-add-row button {
+    flex: none; background: var(--surface-raised); border: 1px solid var(--line); color: var(--text-muted);
+    font-size: 12.5px; padding: 7px 12px; border-radius: 3px; cursor: pointer; white-space: nowrap;
+  }
+  .bulk-add-row button:hover { color: var(--rust-bright); border-color: var(--rust); }
+
+  /* ---------- team photos ---------- */
+  .photos-section { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line-soft); }
+  .photos-head {
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--text-faint); margin-bottom: 8px;
+  }
+  .photo-gallery { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .photo-thumb {
+    position: relative; width: 56px; height: 56px; border-radius: 4px; overflow: hidden;
+    border: 1px solid var(--line); flex: none;
+  }
+  .photo-thumb img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; display: block; }
+  .photo-thumb-del {
+    position: absolute; top: 1px; right: 1px; width: 16px; height: 16px; border-radius: 50%;
+    background: rgba(16,19,21,0.75); color: #fff; border: none; font-size: 11px; line-height: 1; cursor: pointer;
+    display: grid; place-items: center; padding: 0;
+  }
+  .photo-thumb-del:hover { background: var(--alert); }
+  .paste-zone {
+    border: 1px dashed var(--line); border-radius: 4px; padding: 9px; text-align: center;
+    font-size: 11.5px; color: var(--text-faint); cursor: text; margin-bottom: 6px;
+  }
+  .paste-zone:focus-visible { border-color: var(--rust-bright); color: var(--rust-bright); outline: none; }
+  .photo-file-row input[type="file"] { font-size: 11px; color: var(--text-faint); max-width: 100%; }
+
+  .photo-modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 120;
+    display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 14px; padding: 20px;
+  }
+  .photo-modal-backdrop[hidden] { display: none; }
+  .photo-modal-backdrop img { max-width: 90vw; max-height: 78vh; border-radius: 4px; border: 1px solid var(--line); }
+
+  /* ---------- toast ---------- */
+  #toast-stack {
+    position: fixed; right: 16px; bottom: 16px; z-index: 50;
+    display: flex; flex-direction: column; gap: 8px; max-width: 300px;
+  }
+  .toast {
+    background: var(--surface-raised); border: 1px solid var(--alert); color: var(--text);
+    font-size: 13px; padding: 10px 12px; border-radius: 4px; box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+  }
+
+  footer {
+    margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--line);
+    color: var(--text-faint); font-size: 12px; line-height: 1.7;
+  }
+  footer strong { color: var(--text-muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="page-head">
+    <div class="page-head-title">
+      <span class="eyebrow">Rustoria.co · US Main · Vanilla 1x</span>
+      <h1>敵チーム監視</h1>
+    </div>
+    <button class="btn-ghost" id="help-btn" type="button">❓ 使い方</button>
+  </header>
+
+  <div class="room-bar" id="room-bar">
+    <span class="room-bar-status">ルームコード：<b id="room-code-display">------</b>（このコードを友達に伝えるだけでリアルタイム共有できる）</span>
+    <div class="room-bar-actions">
+      <button class="btn-ghost" id="room-copy-btn" type="button">📋 コピー</button>
+      <button class="btn-ghost" id="room-switch-btn" type="button">🔄 別のルームに切り替える</button>
+    </div>
+  </div>
+
+  <div class="global-bar" id="global-bar" aria-live="polite">
+    <span class="global-bar-status"><span id="global-bar-icon"></span>敵 <b id="global-online-count">0</b> 人 IN中</span>
+    <div class="global-bar-actions">
+      <button class="toggle-btn" id="beep-toggle" type="button" aria-pressed="true">🔊 通知音：ON</button>
+      <button class="btn-ghost" id="notif-enable-btn" type="button">🔔 デスクトップ通知を有効化</button>
+    </div>
+  </div>
+
+  <section class="teams-section" aria-labelledby="teams-head">
+    <div class="teams-topbar">
+      <h2 id="teams-head">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+          <circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/>
+        </svg>
+        敵チーム監視
+      </h2>
+      <div class="hero-meta">
+        <span>登録：<b id="teams-count">0</b> チーム</span>
+        <span>最終確認：<b id="teams-last-checked">--:--:--</b></span>
+      </div>
+      <div class="hero-actions">
+        <button class="btn-ghost" id="teams-refresh-btn" type="button">🔄 今すぐ確認</button>
+      </div>
+    </div>
+    <div class="share-bar">
+      <button class="btn-ghost" id="share-link-btn" type="button">📤 共有用リンクを作成</button>
+      <button class="btn-ghost" id="share-text-btn" type="button">📋 テキストで共有</button>
+      <button class="btn-ghost" id="share-import-toggle-btn" type="button">📥 テキストから読み込む</button>
+    </div>
+    <div class="share-import-box" id="share-import-box" hidden>
+      <textarea id="share-import-textarea" rows="3" placeholder="共有されたテキスト(JSON)をここに貼り付け…"></textarea>
+      <button class="btn-ghost" id="share-import-btn" type="button">読み込んでマージ</button>
+    </div>
+    <div class="add-row">
+      <input type="text" id="team-add-input" placeholder="例：北の岩山グループ" />
+      <select id="team-type-select" aria-label="チーム種別">
+        <option value="enemy" selected>⚠ 敵</option>
+        <option value="friend">🟢 味方</option>
+      </select>
+      <button id="team-add-btn" type="button">＋ チーム追加</button>
+    </div>
+    <div class="teams-grid" id="teams-cards"></div>
+  </section>
+
+  <footer>
+    <strong>データソース：</strong> オンライン人数・プレイヤー名簿はBattleMetrics公開APIから取得（無料・APIキー不要）。<br />
+    <strong>仕組み：</strong> Rustの「チーム」所属情報はゲーム内部のプライベートな状態であり公開APIでは取得できないため、
+    敵チームの自動検出は行わない。ここに手動登録したプレイヤー名が、現在サーバーにオンラインかどうかだけを
+    自動確認する。データはブラウザ内のみに保存。
+  </footer>
+</div>
+
+<div id="toast-stack"></div>
+
+<div class="room-modal-backdrop" id="room-modal-backdrop" hidden>
+  <div class="room-modal">
+    <h2>ルームに接続</h2>
+    <p>
+      チーム・メンバーのリストをリアルタイムで共有するための「ルーム」を作成するか、
+      友達から教えてもらったルームコードで参加できる。コードを知っている人だけが同じデータを見られる。
+    </p>
+    <div class="room-modal-row">
+      <button class="btn-ghost" id="room-create-btn" type="button">🆕 新しいルームを作る</button>
+    </div>
+    <div class="room-modal-divider">または</div>
+    <div class="room-modal-row">
+      <input type="text" id="room-join-input" placeholder="ルームコードを入力（例：AB12CD）" maxlength="8" />
+      <button class="btn-ghost" id="room-join-btn" type="button">参加する</button>
+    </div>
+  </div>
+</div>
+
+<div class="photo-modal-backdrop" id="photo-modal-backdrop" hidden>
+  <img id="photo-modal-img" src="" alt="拠点写真拡大表示" />
+  <button class="btn-ghost" id="photo-modal-close-btn" type="button">✕ 閉じる</button>
+</div>
+
+<div class="help-modal-backdrop" id="help-modal-backdrop" hidden>
+  <div class="help-modal">
+    <div class="help-modal-head">
+      <h2>使い方</h2>
+      <button class="btn-ghost" id="help-modal-close-btn" type="button">✕ 閉じる</button>
+    </div>
+    <div class="help-modal-body">
+      <section>
+        <h3>1. ルーム接続</h3>
+        <ul>
+          <li>初回は「🆕 新しいルームを作る」でランダムなルームコードを生成するか、コードを入力して「参加する」で既存の部屋に参加する。</li>
+          <li>一度接続すれば次回以降そのブラウザは自動で同じルームに再接続される。</li>
+          <li>画面上部の「ルームコード」を「📋 コピー」して友達に伝えるだけで共有できる。「🔄 別のルームに切り替える」で別の部屋に移動できる。</li>
+        </ul>
+      </section>
+      <section>
+        <h3>2. チーム登録</h3>
+        <ul>
+          <li>「＋ チーム追加」でチームを登録。種別は「⚠ 敵」（赤）／「🟢 味方」（緑）から選べ、カード左端の色でも見分けられる。チーム名の横のボタンをクリックすると後から種別を切り替えられる。</li>
+        </ul>
+      </section>
+      <section>
+        <h3>3. メンバー追加</h3>
+        <ul>
+          <li>「メンバー名を追加」欄に2文字以上入力すると名前サジェストが出る。候補をクリックするとBattleMetrics IDが自動で紐付き、相手が改名しても追跡できるようになる。</li>
+          <li>手入力してそのまま「＋ メンバー追加」もできる（この場合IDは未紐付け）。</li>
+          <li>「複数名を改行区切りで貼り付け」→「＋ 一括追加」で複数人まとめて登録できる。</li>
+          <li>「部分一致」にチェックを入れると、名前の一部が含まれているだけでオンライン判定される。</li>
+          <li>後から「🔗 ID紐付け」ボタンでも、手入力済みのメンバーにBattleMetrics IDを紐付けられる。</li>
+        </ul>
+      </section>
+      <section>
+        <h3>4. オンライン確認</h3>
+        <ul>
+          <li>30秒ごとに自動でオンライン状況を更新する。「🔄 今すぐ確認」で手動更新もできる。</li>
+          <li>OFFのメンバーには「最終IN: HH:MM」が表示される。</li>
+          <li>誰かがOFF→ONになった瞬間、トースト通知・通知音（「🔊 通知音：ON/OFF」で切替）・デスクトップ通知（「🔔 デスクトップ通知を有効化」で許可）で知らせる。</li>
+        </ul>
+      </section>
+      <section>
+        <h3>5. 拠点写真</h3>
+        <ul>
+          <li>各チームカード内の貼り付け欄をクリックして選択し、Ctrl+Vでスクリーンショットをそのまま貼り付けられる（ファイル選択でも追加可）。</li>
+          <li>サムネイルをクリックすると拡大表示、×ボタンで削除できる。</li>
+        </ul>
+      </section>
+      <section>
+        <h3>6. 友達との共有</h3>
+        <ul>
+          <li>ルームコードを伝えるのが基本の共有方法。</li>
+          <li>この<code>index.html</code>ファイル自体を友達に送ってもよい。<code>file://</code>で直接開いても、そこでルームコードを入力すればFirebase経由で自動的に同じデータに同期される。</li>
+        </ul>
+      </section>
+      <section>
+        <h3>7. バックアップ</h3>
+        <ul>
+          <li>「📤 共有用リンクを作成」「📋 テキストで共有」でチーム構成をURL・テキストとしてバックアップ・共有できる（写真は含まれない）。</li>
+          <li>「📥 テキストから読み込む」でその内容を読み込んでマージできる。</li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-database.js";
+
+(function () {
+  "use strict";
+
+  var firebaseConfig = {
+    apiKey: "AIzaSyA22qQTD-1v5QBNzd7TuVcf_l8hU5lWPvg",
+    authDomain: "rust-5bfa4.firebaseapp.com",
+    databaseURL: "https://rust-5bfa4-default-rtdb.firebaseio.com",
+    projectId: "rust-5bfa4",
+    storageBucket: "rust-5bfa4.firebasestorage.app",
+    messagingSenderId: "703754076062",
+    appId: "1:703754076062:web:f5460fd28f995eee7c608f",
+    measurementId: "G-S6P26JRYD4"
+  };
+  var firebaseApp = initializeApp(firebaseConfig);
+  var db = getDatabase(firebaseApp);
+
+  var BM_SERVER_ID = "6324892";
+  var BM_PLAYERS_API = "https://api.battlemetrics.com/players?filter%5Bservers%5D=" + BM_SERVER_ID + "&filter%5Bonline%5D=true&page%5Bsize%5D=100";
+  var TEAMS_STORAGE_KEY = "rustoria-us-main-teams-v1";
+
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  function makeId(prefix) { return prefix + "-" + Math.floor(Math.random() * 1e9) + "-" + Date.now().toString(36); }
+
+  var DEFAULT_TEAMS_STATE = { teams: [] };
+  function loadTeamsState() {
+    try {
+      var raw = localStorage.getItem(TEAMS_STORAGE_KEY);
+      if (!raw) return clone(DEFAULT_TEAMS_STATE);
+      var parsed = JSON.parse(raw);
+      if (!parsed || !Array.isArray(parsed.teams)) return clone(DEFAULT_TEAMS_STATE);
+      parsed.teams.forEach(function (t) {
+        if (t.type !== "friend" && t.type !== "enemy") t.type = "enemy";
+        if (!Array.isArray(t.photos)) t.photos = [];
+        (t.members || []).forEach(function (m) {
+          if (m.bmId == null) m.bmId = null;
+        });
+      });
+      return parsed;
+    } catch (e) { return clone(DEFAULT_TEAMS_STATE); }
+  }
+  var teamsState = loadTeamsState();
+
+  function saveTeamsLocalOnly() {
+    try { localStorage.setItem(TEAMS_STORAGE_KEY, JSON.stringify(teamsState)); } catch (e) { /* storage full or unavailable */ }
+  }
+  function saveTeamsState() {
+    saveTeamsLocalOnly();
+    syncTeamsToFirebase();
+  }
+
+  function toast(msg) {
+    var stack = document.getElementById("toast-stack");
+    var el = document.createElement("div");
+    el.className = "toast";
+    el.textContent = msg;
+    stack.appendChild(el);
+    setTimeout(function () { el.remove(); }, 6000);
+  }
+
+  /* ---------- room: Firebase realtime sync ---------- */
+  var ROOM_CODE_KEY = "rustoria-team-room-code";
+  var ROOM_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // avoid ambiguous 0/O, 1/I/L
+
+  function generateRoomCode() {
+    var s = "";
+    for (var i = 0; i < 6; i++) s += ROOM_CODE_CHARS[Math.floor(Math.random() * ROOM_CODE_CHARS.length)];
+    return s;
+  }
+  function getSavedRoomCode() {
+    try { return localStorage.getItem(ROOM_CODE_KEY) || null; } catch (e) { return null; }
+  }
+  function saveRoomCode(code) {
+    try { localStorage.setItem(ROOM_CODE_KEY, code); } catch (e) { /* ignore */ }
+  }
+
+  var roomCode = null;
+  var teamsDbRef = null;
+  var teamsListenerUnsub = null;
+
+  function normalizeRemoteTeamsValue(val) {
+    if (Array.isArray(val)) return val;
+    if (val && typeof val === "object") return Object.keys(val).map(function (k) { return val[k]; });
+    return [];
+  }
+
+  function applyRemoteTeams(remoteTeams) {
+    var localMemberById = {};
+    teamsState.teams.forEach(function (t) {
+      (t.members || []).forEach(function (m) { localMemberById[m.id] = m; });
+    });
+    teamsState.teams = remoteTeams
+      .filter(function (rt) { return rt && rt.id && rt.name; })
+      .map(function (rt) {
+        var members = Array.isArray(rt.members) ? rt.members : [];
+        return {
+          id: rt.id,
+          name: rt.name,
+          type: rt.type === "friend" ? "friend" : "enemy",
+          photos: Array.isArray(rt.photos) ? rt.photos : [],
+          members: members
+            .filter(function (rm) { return rm && rm.id && rm.name; })
+            .map(function (rm) {
+              var localMember = localMemberById[rm.id];
+              return {
+                id: rm.id,
+                name: rm.name,
+                partial: !!rm.partial,
+                bmId: rm.bmId || null,
+                online: localMember ? (localMember.online === true || localMember.online === false ? localMember.online : null) : null,
+                lastOnlineAt: localMember ? (localMember.lastOnlineAt || null) : null
+              };
+            })
+        };
+      });
+    saveTeamsLocalOnly();
+  }
+
+  function syncTeamsToFirebase() {
+    if (!teamsDbRef) return;
+    var payload = teamsState.teams.map(function (t) {
+      return {
+        id: t.id,
+        name: t.name,
+        type: t.type === "friend" ? "friend" : "enemy",
+        photos: Array.isArray(t.photos) ? t.photos : [],
+        members: t.members.map(function (m) {
+          return { id: m.id, name: m.name, partial: !!m.partial, bmId: m.bmId || null };
+        })
+      };
+    });
+    set(teamsDbRef, payload).catch(function () {
+      toast("⚠ クラウド同期に失敗した（このデバイスには保存済み）");
+    });
+  }
+
+  function connectToRoom(code, seedIfEmpty) {
+    roomCode = code;
+    saveRoomCode(code);
+    var displayEl = document.getElementById("room-code-display");
+    if (displayEl) displayEl.textContent = code;
+
+    if (teamsListenerUnsub) { teamsListenerUnsub(); teamsListenerUnsub = null; }
+    teamsDbRef = ref(db, "rooms/" + code + "/teams");
+
+    var firstSnapshot = true;
+    teamsListenerUnsub = onValue(teamsDbRef, function (snapshot) {
+      var remoteTeams = normalizeRemoteTeamsValue(snapshot.val());
+      if (firstSnapshot) {
+        firstSnapshot = false;
+        if (seedIfEmpty && remoteTeams.length === 0 && teamsState.teams.length > 0) {
+          syncTeamsToFirebase();
+          renderTeamsList();
+          refreshTeamStatuses();
+          return;
+        }
+      }
+      applyRemoteTeams(remoteTeams);
+      renderTeamsList();
+      refreshTeamStatuses();
+    }, function () {
+      toast("⚠ クラウド接続に失敗した（ローカル保存のみで継続）");
+    });
+
+    var backdrop = document.getElementById("room-modal-backdrop");
+    if (backdrop) backdrop.hidden = true;
+  }
+
+  document.getElementById("room-create-btn").addEventListener("click", function () {
+    connectToRoom(generateRoomCode(), true);
+  });
+  document.getElementById("room-join-btn").addEventListener("click", function () {
+    var input = document.getElementById("room-join-input");
+    var code = input.value.trim().toUpperCase();
+    if (!code) { input.focus(); return; }
+    connectToRoom(code, false);
+  });
+  document.getElementById("room-join-input").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); document.getElementById("room-join-btn").click(); }
+  });
+  document.getElementById("room-copy-btn").addEventListener("click", function () {
+    copyToClipboard(roomCode || "", "📋 ルームコードをコピーした");
+  });
+  document.getElementById("room-switch-btn").addEventListener("click", function () {
+    var input = document.getElementById("room-join-input");
+    if (input) input.value = "";
+    var backdrop = document.getElementById("room-modal-backdrop");
+    if (backdrop) backdrop.hidden = false;
+  });
+
+  var TEAMS_PREFS_KEY = "rustoria-us-main-teams-prefs-v1";
+  var teamsPrefs = (function () {
+    try { return JSON.parse(localStorage.getItem(TEAMS_PREFS_KEY)) || {}; } catch (e) { return {}; }
+  })();
+  function saveTeamsPrefs() { localStorage.setItem(TEAMS_PREFS_KEY, JSON.stringify(teamsPrefs)); }
+  var soundOn = teamsPrefs.sound !== false;
+
+  var audioCtx = null;
+  function unlockAudio() {
+    if (audioCtx) return;
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { /* unsupported */ }
+  }
+  document.addEventListener("click", unlockAudio, { once: true });
+
+  function beep() {
+    if (!soundOn || !audioCtx) return;
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    osc.type = "square";
+    osc.frequency.value = 740;
+    gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.12, audioCtx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.32);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.34);
+  }
+
+  /* ---------- team watch: enemy team monitor ---------- */
+  var teamsLastChecked = null;
+  var lastKnownOnlineNamesLower = [];
+
+  function updateTeamsLastChecked() {
+    var el = document.getElementById("teams-last-checked");
+    if (!el) return;
+    if (!teamsLastChecked) { el.textContent = "--:--:--"; return; }
+    var d = new Date(teamsLastChecked);
+    var pad = function (n) { return (n < 10 ? "0" : "") + n; };
+    el.textContent = pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+  }
+
+  function sortMembersForDisplay(members) {
+    var rank = function (m) { return m.online === true ? 0 : m.online === false ? 1 : 2; };
+    return members
+      .map(function (m, idx) { return { m: m, idx: idx }; })
+      .sort(function (a, b) { var ra = rank(a.m), rb = rank(b.m); return ra !== rb ? ra - rb : a.idx - b.idx; })
+      .map(function (x) { return x.m; });
+  }
+
+  function formatLastSeen(ts) {
+    var d = new Date(ts);
+    var pad = function (n) { return (n < 10 ? "0" : "") + n; };
+    return "最終IN: " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+  }
+
+  function updateLastSeenEl(el, member) {
+    if (member.online === false && member.lastOnlineAt) {
+      el.textContent = formatLastSeen(member.lastOnlineAt);
+      el.classList.remove("is-empty");
+    } else {
+      el.textContent = "";
+      el.classList.add("is-empty");
+    }
+  }
+
+  function computeTotalOnline() {
+    var total = 0;
+    teamsState.teams.forEach(function (team) {
+      team.members.forEach(function (member) { if (member.online === true) total++; });
+    });
+    return total;
+  }
+
+  function updateGlobalBar() {
+    var bar = document.getElementById("global-bar");
+    var countEl = document.getElementById("global-online-count");
+    var iconEl = document.getElementById("global-bar-icon");
+    if (!bar || !countEl) return;
+    var total = computeTotalOnline();
+    countEl.textContent = total;
+    if (iconEl) iconEl.textContent = total > 0 ? "⚠ " : "";
+    bar.classList.toggle("has-online", total > 0);
+  }
+
+  function updateTabTitle() {
+    var total = computeTotalOnline();
+    document.title = total > 0 ? "(" + total + ") 敵チーム監視" : "敵チーム監視";
+  }
+
+  function sendDesktopNotification(title, body) {
+    if (!("Notification" in window)) return;
+    if (Notification.permission !== "granted") return;
+    try { new Notification(title, { body: body }); } catch (e) { /* ignore */ }
+  }
+
+  function updateTeamStatusPills() {
+    var container = document.getElementById("teams-cards");
+    if (!container) return;
+    teamsState.teams.forEach(function (team) {
+      var cardEl = container.querySelector('.team-card[data-team-id="' + CSS.escape(team.id) + '"]');
+      if (!cardEl) return;
+      var onlineCount = team.members.filter(function (m) { return m.online === true; }).length;
+      var badgeEl = cardEl.querySelector(".team-count");
+      if (badgeEl) {
+        badgeEl.textContent = onlineCount + "/" + team.members.length + " IN";
+        badgeEl.classList.toggle("has-online", onlineCount > 0);
+      }
+      team.members.forEach(function (member) {
+        var rowEl = cardEl.querySelector('.member-row[data-member-id="' + CSS.escape(member.id) + '"]');
+        if (!rowEl) return;
+        var nameInputEl = rowEl.querySelector('input[data-field="member-name"]');
+        if (nameInputEl && document.activeElement !== nameInputEl && nameInputEl.value !== member.name) {
+          nameInputEl.value = member.name;
+        }
+        var pillEl = rowEl.querySelector(".status-pill");
+        if (pillEl) {
+          pillEl.className = "status-pill" + (member.online === true ? " online" : member.online === false ? " offline" : "");
+          pillEl.textContent = member.online === true ? "🟢 IN" : member.online === false ? "⚫ OFF" : "--";
+        }
+        var lastSeenEl = rowEl.querySelector(".last-seen");
+        if (lastSeenEl) updateLastSeenEl(lastSeenEl, member);
+      });
+      var membersWrap = cardEl.querySelector(".members");
+      if (membersWrap && !membersWrap.contains(document.activeElement)) {
+        sortMembersForDisplay(team.members).forEach(function (member) {
+          var rowEl = membersWrap.querySelector('.member-row[data-member-id="' + CSS.escape(member.id) + '"]');
+          var wrapEl = rowEl ? rowEl.closest(".member-wrap") : null;
+          if (wrapEl) membersWrap.appendChild(wrapEl);
+          else if (rowEl) membersWrap.appendChild(rowEl);
+        });
+      }
+    });
+    updateGlobalBar();
+    updateTabTitle();
+  }
+
+  function createNameSearchWidget(config) {
+    var wrap = document.createElement("div");
+    wrap.className = "member-add-wrap";
+
+    var row = document.createElement("div");
+    row.className = "member-add-row";
+
+    var input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = config.placeholder || "";
+    input.setAttribute("aria-label", config.ariaLabel || "検索");
+    input.setAttribute("autocomplete", "off");
+
+    var suggestBox = document.createElement("div");
+    suggestBox.className = "suggest-box";
+    suggestBox.hidden = true;
+    var suggestItems = [];
+    var activeSuggestIndex = -1;
+    var searchDebounceTimer = null;
+    var searchSeq = 0;
+
+    function hide() {
+      suggestBox.hidden = true;
+      suggestBox.innerHTML = "";
+      suggestItems = [];
+      activeSuggestIndex = -1;
+    }
+
+    function highlightActive() {
+      var children = suggestBox.querySelectorAll(".suggest-item");
+      children.forEach(function (el, i) { el.classList.toggle("active", i === activeSuggestIndex); });
+    }
+
+    function renderSuggestions(items) {
+      suggestBox.innerHTML = "";
+      suggestItems = items;
+      activeSuggestIndex = -1;
+      if (items.length === 0) {
+        var emptyEl = document.createElement("div");
+        emptyEl.className = "suggest-empty";
+        emptyEl.textContent = "候補なし（そのまま追加できます）";
+        suggestBox.appendChild(emptyEl);
+        suggestBox.hidden = false;
+        return;
+      }
+      items.forEach(function (playerItem) {
+        var item = document.createElement("div");
+        item.className = "suggest-item";
+        var nameEl = document.createElement("span");
+        nameEl.className = "suggest-name";
+        nameEl.textContent = playerItem.name;
+        item.appendChild(nameEl);
+        if (lastKnownOnlineNamesLower.indexOf(playerItem.name.trim().toLowerCase()) !== -1) {
+          var onlineEl = document.createElement("span");
+          onlineEl.className = "suggest-online";
+          onlineEl.textContent = "🟢 IN";
+          item.appendChild(onlineEl);
+        }
+        item.addEventListener("mousedown", function (e) {
+          e.preventDefault();
+          hide();
+          config.onPick(playerItem.name, playerItem.id);
+        });
+        suggestBox.appendChild(item);
+      });
+      suggestBox.hidden = false;
+    }
+
+    input.addEventListener("input", function () {
+      var query = input.value.trim();
+      if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+      if (query.length < 2) { hide(); return; }
+      searchDebounceTimer = setTimeout(function () {
+        var mySeq = ++searchSeq;
+        searchPlayers(query)
+          .then(function (items) {
+            if (mySeq !== searchSeq) return;
+            renderSuggestions(items);
+          })
+          .catch(function () {
+            if (mySeq !== searchSeq) return;
+            hide();
+          });
+      }, 400);
+    });
+
+    input.addEventListener("keydown", function (e) {
+      if (!suggestBox.hidden && suggestItems.length > 0 && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+        e.preventDefault();
+        if (e.key === "ArrowDown") activeSuggestIndex = Math.min(activeSuggestIndex + 1, suggestItems.length - 1);
+        else activeSuggestIndex = Math.max(activeSuggestIndex - 1, 0);
+        highlightActive();
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (!suggestBox.hidden && activeSuggestIndex >= 0 && suggestItems[activeSuggestIndex]) {
+          var picked = suggestItems[activeSuggestIndex];
+          hide();
+          config.onPick(picked.name, picked.id);
+        } else if (config.onManualSubmit) {
+          var name = input.value.trim();
+          if (name) { hide(); config.onManualSubmit(name); }
+          else input.focus();
+        }
+        return;
+      }
+      if (e.key === "Escape") { hide(); }
+    });
+    input.addEventListener("blur", function () {
+      setTimeout(hide, 150);
+    });
+
+    row.appendChild(input);
+    if (config.buttonText) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = config.buttonText;
+      btn.addEventListener("click", function () {
+        var name = input.value.trim();
+        if (!name) { input.focus(); return; }
+        if (config.onManualSubmit) config.onManualSubmit(name);
+      });
+      row.appendChild(btn);
+    }
+
+    wrap.appendChild(row);
+    wrap.appendChild(suggestBox);
+    return { wrap: wrap, input: input, hide: hide };
+  }
+
+  /* ---------- team photos: paste/compress/gallery ---------- */
+  function compressImageFile(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        var img = new Image();
+        img.onload = function () {
+          var maxW = 800;
+          var scale = Math.min(1, maxW / img.width);
+          var w = Math.max(1, Math.round(img.width * scale));
+          var h = Math.max(1, Math.round(img.height * scale));
+          var canvas = document.createElement("canvas");
+          canvas.width = w; canvas.height = h;
+          var ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, w, h);
+          try {
+            resolve(canvas.toDataURL("image/jpeg", 0.6));
+          } catch (err) { reject(err); }
+        };
+        img.onerror = function () { reject(new Error("image decode failed")); };
+        img.src = e.target.result;
+      };
+      reader.onerror = function () { reject(new Error("file read failed")); };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function addPhotoToTeam(team, dataUrl) {
+    if (!Array.isArray(team.photos)) team.photos = [];
+    team.photos.push({ id: makeId("photo"), dataUrl: dataUrl, addedAt: Date.now() });
+    saveTeamsState();
+    renderTeamsList();
+    toast("📷 写真を追加した");
+  }
+
+  function deletePhotoFromTeam(team, photoId) {
+    team.photos = (team.photos || []).filter(function (p) { return p.id !== photoId; });
+    saveTeamsState();
+    renderTeamsList();
+  }
+
+  function openPhotoModal(dataUrl) {
+    var img = document.getElementById("photo-modal-img");
+    var backdrop = document.getElementById("photo-modal-backdrop");
+    if (!img || !backdrop) return;
+    img.src = dataUrl;
+    backdrop.hidden = false;
+  }
+
+  (function wirePhotoModal() {
+    var backdrop = document.getElementById("photo-modal-backdrop");
+    var closeBtn = document.getElementById("photo-modal-close-btn");
+    if (closeBtn) closeBtn.addEventListener("click", function () { backdrop.hidden = true; });
+    if (backdrop) backdrop.addEventListener("click", function (e) { if (e.target === backdrop) backdrop.hidden = true; });
+  })();
+
+  (function wireHelpModal() {
+    var backdrop = document.getElementById("help-modal-backdrop");
+    var openBtn = document.getElementById("help-btn");
+    var closeBtn = document.getElementById("help-modal-close-btn");
+    if (openBtn) openBtn.addEventListener("click", function () { backdrop.hidden = false; });
+    if (closeBtn) closeBtn.addEventListener("click", function () { backdrop.hidden = true; });
+    if (backdrop) backdrop.addEventListener("click", function (e) { if (e.target === backdrop) backdrop.hidden = true; });
+  })();
+
+  function handleImageFile(team, file) {
+    if (!file || file.type.indexOf("image/") !== 0) return;
+    compressImageFile(file)
+      .then(function (dataUrl) { addPhotoToTeam(team, dataUrl); })
+      .catch(function () { toast("⚠ 画像の読み込みに失敗した"); });
+  }
+
+  function buildPhotosSection(team) {
+    var section = document.createElement("div");
+    section.className = "photos-section";
+
+    var head = document.createElement("div");
+    head.className = "photos-head";
+    head.textContent = "📷 拠点写真";
+    section.appendChild(head);
+
+    var gallery = document.createElement("div");
+    gallery.className = "photo-gallery";
+    (team.photos || []).forEach(function (photo) {
+      var thumb = document.createElement("div");
+      thumb.className = "photo-thumb";
+      var img = document.createElement("img");
+      img.src = photo.dataUrl;
+      img.alt = "拠点写真";
+      img.addEventListener("click", function () { openPhotoModal(photo.dataUrl); });
+      var delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "photo-thumb-del";
+      delBtn.textContent = "×";
+      delBtn.setAttribute("aria-label", "写真を削除");
+      delBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        deletePhotoFromTeam(team, photo.id);
+      });
+      thumb.appendChild(img);
+      thumb.appendChild(delBtn);
+      gallery.appendChild(thumb);
+    });
+    section.appendChild(gallery);
+
+    var pasteZone = document.createElement("div");
+    pasteZone.className = "paste-zone";
+    pasteZone.tabIndex = 0;
+    pasteZone.textContent = "ここをクリックして選択し、Ctrl+Vでスクリーンショットを貼り付け";
+    pasteZone.addEventListener("paste", function (e) {
+      var items = (e.clipboardData && e.clipboardData.items) || [];
+      var imageItem = null;
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].type && items[i].type.indexOf("image/") === 0) { imageItem = items[i]; break; }
+      }
+      if (!imageItem) return;
+      e.preventDefault();
+      var file = imageItem.getAsFile();
+      handleImageFile(team, file);
+    });
+    section.appendChild(pasteZone);
+
+    var fileRow = document.createElement("div");
+    fileRow.className = "photo-file-row";
+    var fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = "image/*";
+    fileInput.setAttribute("aria-label", "拠点写真をファイルから追加");
+    fileInput.addEventListener("change", function () {
+      var file = fileInput.files && fileInput.files[0];
+      handleImageFile(team, file);
+      fileInput.value = "";
+    });
+    fileRow.appendChild(fileInput);
+    section.appendChild(fileRow);
+
+    return section;
+  }
+
+  /* ---------- OCR: screenshot -> name (drag-select region -> Tesseract.js -> name search) ---------- */
+  function fileToDataUrl(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function (e) { resolve(e.target.result); };
+      reader.onerror = function () { reject(new Error("file read failed")); };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function buildOcrSection(team, addMemberWithName) {
+    var section = document.createElement("div");
+    section.className = "ocr-section";
+
+    var toggleBtn = document.createElement("button");
+    toggleBtn.type = "button";
+    toggleBtn.className = "btn-ghost";
+    toggleBtn.textContent = "📷 スクショから名前を追加";
+    section.appendChild(toggleBtn);
+
+    var panel = document.createElement("div");
+    panel.className = "ocr-panel";
+    panel.hidden = true;
+    section.appendChild(panel);
+
+    toggleBtn.addEventListener("click", function () { panel.hidden = !panel.hidden; });
+
+    var inputRow = document.createElement("div");
+    inputRow.className = "ocr-input-row";
+
+    var pasteZone = document.createElement("div");
+    pasteZone.className = "paste-zone";
+    pasteZone.tabIndex = 0;
+    pasteZone.textContent = "ここをクリックして選択し、Ctrl+Vでスクショを貼り付け";
+
+    var fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = "image/*";
+    fileInput.setAttribute("aria-label", "スクショをファイルから選択");
+
+    inputRow.appendChild(pasteZone);
+    inputRow.appendChild(fileInput);
+    panel.appendChild(inputRow);
+
+    var canvasWrap = document.createElement("div");
+    canvasWrap.className = "ocr-canvas-wrap";
+    canvasWrap.hidden = true;
+    var canvas = document.createElement("canvas");
+    var selectBox = document.createElement("div");
+    selectBox.className = "ocr-select-box";
+    canvasWrap.appendChild(canvas);
+    canvasWrap.appendChild(selectBox);
+    panel.appendChild(canvasWrap);
+
+    var actionsRow = document.createElement("div");
+    actionsRow.className = "ocr-actions";
+    actionsRow.hidden = true;
+    var readBtn = document.createElement("button");
+    readBtn.type = "button";
+    readBtn.className = "btn-ghost";
+    readBtn.textContent = "この範囲を読み取る";
+    var statusEl = document.createElement("span");
+    statusEl.className = "ocr-status";
+    actionsRow.appendChild(readBtn);
+    actionsRow.appendChild(statusEl);
+    panel.appendChild(actionsRow);
+
+    var ctx = canvas.getContext("2d");
+    var isDragging = false;
+    var dragStartDisplay = null;
+    var selectionCanvasRect = null;
+
+    function loadImageOntoCanvas(dataUrl) {
+      var img = new Image();
+      img.onload = function () {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        canvasWrap.hidden = false;
+        actionsRow.hidden = false;
+        selectBox.style.display = "none";
+        selectionCanvasRect = null;
+        statusEl.textContent = "";
+      };
+      img.onerror = function () { toast("⚠ 画像の読み込みに失敗した"); };
+      img.src = dataUrl;
+    }
+
+    pasteZone.addEventListener("paste", function (e) {
+      var items = (e.clipboardData && e.clipboardData.items) || [];
+      var imageItem = null;
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].type && items[i].type.indexOf("image/") === 0) { imageItem = items[i]; break; }
+      }
+      if (!imageItem) return;
+      e.preventDefault();
+      var file = imageItem.getAsFile();
+      if (!file) return;
+      fileToDataUrl(file).then(loadImageOntoCanvas).catch(function () { toast("⚠ 画像の読み込みに失敗した"); });
+    });
+
+    fileInput.addEventListener("change", function () {
+      var file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      fileToDataUrl(file).then(loadImageOntoCanvas).catch(function () { toast("⚠ 画像の読み込みに失敗した"); });
+      fileInput.value = "";
+    });
+
+    function updateSelectionBox(start, cur) {
+      var rect = canvas.getBoundingClientRect();
+      var left = Math.max(0, Math.min(start.x, cur.x));
+      var top = Math.max(0, Math.min(start.y, cur.y));
+      var right = Math.min(rect.width, Math.max(start.x, cur.x));
+      var bottom = Math.min(rect.height, Math.max(start.y, cur.y));
+      var w = Math.max(0, right - left);
+      var h = Math.max(0, bottom - top);
+      selectBox.style.display = "block";
+      selectBox.style.left = left + "px";
+      selectBox.style.top = top + "px";
+      selectBox.style.width = w + "px";
+      selectBox.style.height = h + "px";
+
+      var scaleX = canvas.width / rect.width;
+      var scaleY = canvas.height / rect.height;
+      selectionCanvasRect = { x: left * scaleX, y: top * scaleY, w: w * scaleX, h: h * scaleY };
+    }
+
+    canvas.addEventListener("mousedown", function (e) {
+      var rect = canvas.getBoundingClientRect();
+      dragStartDisplay = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      isDragging = true;
+      updateSelectionBox(dragStartDisplay, dragStartDisplay);
+      e.preventDefault();
+    });
+    document.addEventListener("mousemove", function (e) {
+      if (!isDragging) return;
+      var rect = canvas.getBoundingClientRect();
+      var cur = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      updateSelectionBox(dragStartDisplay, cur);
+    });
+    document.addEventListener("mouseup", function () { isDragging = false; });
+
+    function runOcr() {
+      var rect = selectionCanvasRect;
+      var cropCanvas = document.createElement("canvas");
+      cropCanvas.width = Math.max(1, Math.round(rect.w));
+      cropCanvas.height = Math.max(1, Math.round(rect.h));
+      var cropCtx = cropCanvas.getContext("2d");
+      cropCtx.drawImage(canvas, rect.x, rect.y, rect.w, rect.h, 0, 0, cropCanvas.width, cropCanvas.height);
+
+      if (!window.Tesseract) {
+        statusEl.textContent = "OCRライブラリの読み込みに失敗した。手動で入力してください";
+        return;
+      }
+
+      statusEl.textContent = "読み取り中…（初回はモデルのダウンロードで少し時間がかかる）";
+      readBtn.disabled = true;
+
+      window.Tesseract.recognize(cropCanvas, "eng")
+        .then(function (result) {
+          readBtn.disabled = false;
+          var text = ((result && result.data && result.data.text) || "").replace(/\s+/g, " ").trim();
+          if (!text) {
+            statusEl.textContent = "読み取れなかった。手動で入力してください";
+            return;
+          }
+          statusEl.textContent = "読み取り結果を下の欄に入れた。違っていれば修正してから候補を選んでください";
+          ocrSearchWidget.input.value = text;
+          ocrSearchWidget.input.dispatchEvent(new Event("input", { bubbles: true }));
+          ocrSearchWidget.input.focus();
+        })
+        .catch(function () {
+          readBtn.disabled = false;
+          statusEl.textContent = "読み取れなかった。手動で入力してください";
+        });
+    }
+
+    readBtn.addEventListener("click", function () {
+      if (!selectionCanvasRect || selectionCanvasRect.w < 5 || selectionCanvasRect.h < 5) {
+        toast("⚠ 範囲をドラッグして選択してください");
+        return;
+      }
+      runOcr();
+    });
+
+    function resetOcrPanel() {
+      canvasWrap.hidden = true;
+      actionsRow.hidden = true;
+      statusEl.textContent = "";
+      selectionCanvasRect = null;
+      ocrSearchWidget.input.value = "";
+    }
+
+    var ocrSearchWidget = createNameSearchWidget({
+      placeholder: "OCR結果（修正可）または手入力",
+      ariaLabel: "スクショから読み取った名前を検索・追加",
+      onPick: function (name, id) {
+        addMemberWithName(name, id);
+        panel.hidden = true;
+        resetOcrPanel();
+      },
+      onManualSubmit: function (name) {
+        addMemberWithName(name, null);
+        panel.hidden = true;
+        resetOcrPanel();
+      }
+    });
+    panel.appendChild(ocrSearchWidget.wrap);
+
+    return section;
+  }
+
+  function renderTeamsList() {
+    var container = document.getElementById("teams-cards");
+    var active = document.activeElement;
+    var focusInfo = null;
+    if (active && container.contains(active)) {
+      var teamCardEl = active.closest(".team-card");
+      var memberRowEl = active.closest(".member-row");
+      focusInfo = {
+        teamId: teamCardEl ? teamCardEl.dataset.teamId : null,
+        memberId: memberRowEl ? memberRowEl.dataset.memberId : null,
+        field: active.dataset.field || null,
+        selStart: (typeof active.selectionStart === "number") ? active.selectionStart : null
+      };
+    }
+
+    document.getElementById("teams-count").textContent = teamsState.teams.length;
+    container.innerHTML = "";
+
+    if (teamsState.teams.length === 0) {
+      var note = document.createElement("div");
+      note.className = "empty-note";
+      note.textContent = "登録済みの敵チームがない。上の「＋ チーム追加」から登録できる。";
+      container.appendChild(note);
+      return;
+    }
+
+    teamsState.teams.forEach(function (team) {
+      var card = document.createElement("div");
+      card.className = "team-card";
+      card.dataset.teamId = team.id;
+      card.dataset.teamType = team.type === "friend" ? "friend" : "enemy";
+
+      var top = document.createElement("div");
+      top.className = "team-card-top";
+
+      var nameInput = document.createElement("input");
+      nameInput.type = "text";
+      nameInput.value = team.name;
+      nameInput.dataset.field = "team-name";
+      nameInput.setAttribute("aria-label", "チーム名");
+      nameInput.addEventListener("change", function () {
+        team.name = nameInput.value.trim() || team.name;
+        nameInput.value = team.name;
+        saveTeamsState();
+      });
+
+      var typeBtn = document.createElement("button");
+      typeBtn.type = "button";
+      typeBtn.className = "type-toggle " + (team.type === "friend" ? "friend" : "enemy");
+      typeBtn.textContent = team.type === "friend" ? "🟢 味方" : "⚠ 敵";
+      typeBtn.setAttribute("aria-label", "チーム種別（クリックで切替）");
+      typeBtn.addEventListener("click", function () {
+        team.type = team.type === "friend" ? "enemy" : "friend";
+        saveTeamsState();
+        renderTeamsList();
+      });
+
+      var onlineCount = team.members.filter(function (m) { return m.online === true; }).length;
+      var countBadge = document.createElement("span");
+      countBadge.className = "badge team-count" + (onlineCount > 0 ? " has-online" : "");
+      countBadge.textContent = onlineCount + "/" + team.members.length + " IN";
+
+      var delTeamBtn = document.createElement("button");
+      delTeamBtn.className = "del"; delTeamBtn.type = "button";
+      delTeamBtn.setAttribute("aria-label", team.name + " チームを削除");
+      delTeamBtn.textContent = "×";
+      delTeamBtn.addEventListener("click", function () {
+        if (!confirm('チーム「' + team.name + '」を削除する？')) return;
+        teamsState.teams = teamsState.teams.filter(function (t) { return t.id !== team.id; });
+        saveTeamsState();
+        renderTeamsList();
+      });
+
+      top.appendChild(nameInput);
+      top.appendChild(typeBtn);
+      top.appendChild(countBadge);
+      top.appendChild(delTeamBtn);
+      card.appendChild(top);
+
+      var membersWrap = document.createElement("div");
+      membersWrap.className = "members";
+
+      if (team.members.length === 0) {
+        var mNote = document.createElement("div");
+        mNote.className = "empty-note";
+        mNote.textContent = "メンバー未登録";
+        membersWrap.appendChild(mNote);
+      }
+
+      sortMembersForDisplay(team.members).forEach(function (member) {
+        var memberWrap = document.createElement("div");
+        memberWrap.className = "member-wrap";
+
+        var row = document.createElement("div");
+        row.className = "member-row";
+        row.dataset.memberId = member.id;
+
+        var mNameInput = document.createElement("input");
+        mNameInput.type = "text";
+        mNameInput.value = member.name;
+        mNameInput.dataset.field = "member-name";
+        mNameInput.setAttribute("aria-label", "プレイヤー名");
+        mNameInput.title = member.bmId ? "BattleMetrics IDと紐付け済み（改名しても自動追従）" : "";
+        mNameInput.addEventListener("change", function () {
+          member.name = mNameInput.value.trim() || member.name;
+          mNameInput.value = member.name;
+          member.online = null;
+          saveTeamsState();
+          renderTeamsList();
+          refreshTeamStatuses();
+        });
+
+        var partialLabel = document.createElement("label");
+        partialLabel.className = "member-partial";
+        var partialCb = document.createElement("input");
+        partialCb.type = "checkbox";
+        partialCb.checked = !!member.partial;
+        partialCb.addEventListener("change", function () {
+          member.partial = partialCb.checked;
+          saveTeamsState();
+          refreshTeamStatuses();
+        });
+        partialLabel.appendChild(partialCb);
+        partialLabel.appendChild(document.createTextNode("部分一致"));
+
+        var pill = document.createElement("span");
+        pill.className = "status-pill" + (member.online === true ? " online" : member.online === false ? " offline" : "");
+        pill.textContent = member.online === true ? "🟢 IN" : member.online === false ? "⚫ OFF" : "--";
+
+        var lastSeenEl = document.createElement("span");
+        lastSeenEl.className = "last-seen";
+        updateLastSeenEl(lastSeenEl, member);
+
+        var linkBtn = null;
+        var linkWidget = null;
+        if (!member.bmId) {
+          linkBtn = document.createElement("button");
+          linkBtn.type = "button";
+          linkBtn.className = "link-id-btn";
+          linkBtn.textContent = "🔗 ID紐付け";
+          linkBtn.setAttribute("aria-label", member.name + " にBattleMetrics IDを紐付け");
+
+          linkWidget = createNameSearchWidget({
+            placeholder: "候補から選択…",
+            ariaLabel: member.name + " のBattleMetrics ID検索",
+            onPick: function (name, id) {
+              member.bmId = id || null;
+              if (name && name !== member.name) member.name = name;
+              saveTeamsState();
+              renderTeamsList();
+              toast("🔗 " + member.name + " にIDを紐付けた（改名にも自動追従する）");
+            }
+          });
+          linkWidget.wrap.classList.add("link-id-wrap");
+          linkWidget.wrap.hidden = true;
+          linkWidget.input.value = member.name;
+
+          linkBtn.addEventListener("click", function () {
+            linkWidget.wrap.hidden = !linkWidget.wrap.hidden;
+            if (!linkWidget.wrap.hidden) { linkWidget.input.focus(); linkWidget.input.select(); }
+          });
+        }
+
+        var delMemberBtn = document.createElement("button");
+        delMemberBtn.className = "del"; delMemberBtn.type = "button";
+        delMemberBtn.setAttribute("aria-label", member.name + " を削除");
+        delMemberBtn.textContent = "×";
+        delMemberBtn.addEventListener("click", function () {
+          team.members = team.members.filter(function (x) { return x.id !== member.id; });
+          saveTeamsState();
+          renderTeamsList();
+        });
+
+        row.appendChild(mNameInput);
+        row.appendChild(partialLabel);
+        row.appendChild(pill);
+        row.appendChild(lastSeenEl);
+        if (linkBtn) row.appendChild(linkBtn);
+        row.appendChild(delMemberBtn);
+        memberWrap.appendChild(row);
+        if (linkWidget) memberWrap.appendChild(linkWidget.wrap);
+        membersWrap.appendChild(memberWrap);
+      });
+
+      card.appendChild(membersWrap);
+
+      function addMemberWithName(name, bmId) {
+        team.members.push({ id: makeId("member"), name: name, partial: false, online: null, lastOnlineAt: null, bmId: bmId || null });
+        saveTeamsState();
+        renderTeamsList();
+        refreshTeamStatuses();
+      }
+
+      var addWidget = createNameSearchWidget({
+        placeholder: "例：Bandit_King",
+        ariaLabel: "メンバー名を追加",
+        buttonText: "＋ メンバー追加",
+        onPick: function (name, id) { addMemberWithName(name, id); },
+        onManualSubmit: function (name) { addMemberWithName(name, null); }
+      });
+      card.appendChild(addWidget.wrap);
+
+      var bulkRow = document.createElement("div");
+      bulkRow.className = "bulk-add-row";
+      var bulkTextarea = document.createElement("textarea");
+      bulkTextarea.rows = 2;
+      bulkTextarea.placeholder = "複数名を改行区切りで貼り付け…";
+      bulkTextarea.setAttribute("aria-label", "複数メンバーを一括追加");
+      var bulkBtn = document.createElement("button");
+      bulkBtn.type = "button";
+      bulkBtn.textContent = "＋ 一括追加";
+      bulkBtn.addEventListener("click", function () {
+        var lines = bulkTextarea.value.split(/\r?\n/).map(function (s) { return s.trim(); }).filter(function (s) { return s.length > 0; });
+        if (lines.length === 0) { bulkTextarea.focus(); return; }
+        var existingLower = team.members.map(function (m) { return m.name.trim().toLowerCase(); });
+        var addedCount = 0;
+        lines.forEach(function (name) {
+          var lower = name.toLowerCase();
+          if (existingLower.indexOf(lower) !== -1) return;
+          existingLower.push(lower);
+          team.members.push({ id: makeId("member"), name: name, partial: false, online: null, lastOnlineAt: null, bmId: null });
+          addedCount++;
+        });
+        bulkTextarea.value = "";
+        saveTeamsState();
+        renderTeamsList();
+        if (addedCount > 0) { refreshTeamStatuses(); toast(addedCount + "名を一括追加した"); }
+      });
+      bulkRow.appendChild(bulkTextarea);
+      bulkRow.appendChild(bulkBtn);
+      card.appendChild(bulkRow);
+
+      card.appendChild(buildOcrSection(team, addMemberWithName));
+
+      card.appendChild(buildPhotosSection(team));
+
+      container.appendChild(card);
+    });
+
+    if (focusInfo && focusInfo.teamId) {
+      var sel = '.team-card[data-team-id="' + CSS.escape(focusInfo.teamId) + '"]';
+      if (focusInfo.memberId) sel += ' .member-row[data-member-id="' + CSS.escape(focusInfo.memberId) + '"]';
+      if (focusInfo.field) sel += ' input[data-field="' + focusInfo.field + '"]';
+      var toRefocus = container.querySelector(sel);
+      if (toRefocus) {
+        toRefocus.focus();
+        if (focusInfo.selStart != null && typeof toRefocus.setSelectionRange === "function") {
+          try { toRefocus.setSelectionRange(focusInfo.selStart, focusInfo.selStart); } catch (e) { /* ignore */ }
+        }
+      }
+    }
+
+    updateGlobalBar();
+    updateTabTitle();
+  }
+
+  function addTeam() {
+    var input = document.getElementById("team-add-input");
+    var typeSelect = document.getElementById("team-type-select");
+    var name = input.value.trim();
+    if (!name) { input.focus(); return; }
+    var type = (typeSelect && typeSelect.value === "friend") ? "friend" : "enemy";
+    teamsState.teams.push({ id: makeId("team"), name: name, type: type, members: [], photos: [] });
+    input.value = "";
+    saveTeamsState();
+    renderTeamsList();
+  }
+  document.getElementById("team-add-btn").addEventListener("click", addTeam);
+  document.getElementById("team-add-input").addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); addTeam(); } });
+  document.getElementById("teams-refresh-btn").addEventListener("click", function () { refreshTeamStatuses(); });
+
+  var beepToggleBtn = document.getElementById("beep-toggle");
+  function applyBeepLabel() {
+    beepToggleBtn.textContent = soundOn ? "🔊 通知音：ON" : "🔈 通知音：OFF";
+    beepToggleBtn.setAttribute("aria-pressed", String(soundOn));
+  }
+  applyBeepLabel();
+  beepToggleBtn.addEventListener("click", function () {
+    soundOn = !soundOn; teamsPrefs.sound = soundOn; saveTeamsPrefs(); applyBeepLabel();
+  });
+
+  var notifBtn = document.getElementById("notif-enable-btn");
+  function updateNotifBtnLabel() {
+    if (!("Notification" in window)) { notifBtn.textContent = "🔕 通知非対応"; notifBtn.disabled = true; return; }
+    if (Notification.permission === "granted") { notifBtn.textContent = "🔔 デスクトップ通知：有効"; }
+    else if (Notification.permission === "denied") { notifBtn.textContent = "🔕 デスクトップ通知：ブロック済み"; }
+    else { notifBtn.textContent = "🔔 デスクトップ通知を有効化"; }
+  }
+  updateNotifBtnLabel();
+  notifBtn.addEventListener("click", function () {
+    if (!("Notification" in window) || Notification.permission !== "default") return;
+    Notification.requestPermission().then(function () { updateNotifBtnLabel(); });
+  });
+
+  function bmPlayerId(p) {
+    if (!p) return null;
+    if (p.attributes && p.attributes.id != null) return String(p.attributes.id);
+    if (p.id != null) return String(p.id);
+    return null;
+  }
+
+  function fetchOnlinePlayerPage(url, entries, pageNum, maxPages) {
+    return fetch(url, { cache: "no-store" })
+      .then(function (res) { if (!res.ok) throw new Error("bad status " + res.status); return res.json(); })
+      .then(function (data) {
+        (data.data || []).forEach(function (p) {
+          if (p && p.attributes && p.attributes.name) {
+            entries.push({ name: p.attributes.name, id: bmPlayerId(p) });
+          }
+        });
+        var next = data.links && data.links.next;
+        if (next && pageNum < maxPages) return fetchOnlinePlayerPage(next, entries, pageNum + 1, maxPages);
+        return entries;
+      });
+  }
+
+  function searchPlayers(query) {
+    var url = "https://api.battlemetrics.com/players?filter%5Bsearch%5D=" + encodeURIComponent(query) +
+      "&filter%5Bservers%5D=" + BM_SERVER_ID + "&page%5Bsize%5D=10";
+    return fetch(url, { cache: "no-store" })
+      .then(function (res) { if (!res.ok) throw new Error("bad status " + res.status); return res.json(); })
+      .then(function (data) {
+        return (data.data || [])
+          .filter(function (p) { return p && p.attributes && p.attributes.name; })
+          .map(function (p) { return { name: p.attributes.name, id: bmPlayerId(p) }; });
+      });
+  }
+
+  function refreshTeamStatuses() {
+    var totalMembers = teamsState.teams.reduce(function (sum, t) { return sum + t.members.length; }, 0);
+    if (totalMembers === 0) {
+      teamsLastChecked = Date.now();
+      updateTeamsLastChecked();
+      updateGlobalBar();
+      updateTabTitle();
+      return;
+    }
+    fetchOnlinePlayerPage(BM_PLAYERS_API, [], 1, 8)
+      .then(function (entries) {
+        var lowerNames = entries.map(function (e) { return e.name.trim().toLowerCase(); });
+        lastKnownOnlineNamesLower = lowerNames;
+        var onlineIdNames = new Map();
+        entries.forEach(function (e) { if (e.id) onlineIdNames.set(e.id, e.name); });
+        var transitions = [];
+        teamsState.teams.forEach(function (team) {
+          team.members.forEach(function (member) {
+            var wasOnline = member.online;
+            var isOnline = false;
+            if (member.bmId) {
+              // ID一致は改名されても追跡できる。partial設定は無視して常に完全一致的に扱う
+              isOnline = onlineIdNames.has(member.bmId);
+              if (isOnline) {
+                var liveName = onlineIdNames.get(member.bmId);
+                if (liveName && liveName !== member.name) member.name = liveName;
+              }
+            } else {
+              var mName = member.name.trim().toLowerCase();
+              if (mName) {
+                isOnline = member.partial
+                  ? lowerNames.some(function (n) { return n.indexOf(mName) !== -1; })
+                  : lowerNames.indexOf(mName) !== -1;
+              }
+            }
+            member.online = isOnline;
+            if (isOnline) member.lastOnlineAt = Date.now();
+            if (wasOnline === false && isOnline === true) {
+              transitions.push({ teamName: team.name, memberName: member.name, teamType: team.type });
+            }
+          });
+        });
+        saveTeamsLocalOnly(); // online/lastOnlineAt is derived locally per-client; no need to push to Firebase every poll
+        teamsLastChecked = Date.now();
+        updateTeamsLastChecked();
+        updateTeamStatusPills();
+        transitions.forEach(function (t) {
+          var isFriend = t.teamType === "friend";
+          toast((isFriend ? "🟢 味方の" : "⚠ 敵の") + t.memberName + "がIN（" + t.teamName + "）");
+          beep();
+          sendDesktopNotification(
+            isFriend ? "味方がログインした" : "敵がログインした",
+            t.teamName + " - " + t.memberName + " がオンラインになった"
+          );
+        });
+      })
+      .catch(function () {
+        toast("⚠ 敵チーム監視：オンライン名簿の取得に失敗した（前回のステータスを保持）");
+      });
+  }
+
+  /* ---------- share: export / import ---------- */
+  function buildSharePayload() {
+    return {
+      teams: teamsState.teams.map(function (t) {
+        return {
+          name: t.name,
+          type: t.type === "friend" ? "friend" : "enemy",
+          members: t.members.map(function (m) {
+            return { name: m.name, partial: !!m.partial, bmId: m.bmId || null };
+          })
+        };
+      })
+    };
+  }
+
+  function encodeSharePayload(payload) {
+    var json = JSON.stringify(payload);
+    return encodeURIComponent(btoa(unescape(encodeURIComponent(json))));
+  }
+
+  function decodeSharePayload(str) {
+    var json = decodeURIComponent(escape(atob(decodeURIComponent(str))));
+    return JSON.parse(json);
+  }
+
+  function buildShareUrl() {
+    var encoded = encodeSharePayload(buildSharePayload());
+    return location.origin + location.pathname + "#share=" + encoded;
+  }
+
+  function promptForCopy(text) {
+    try { window.prompt("以下をコピーして共有できる:", text); } catch (e) { /* ignore */ }
+  }
+
+  function copyToClipboard(text, successMsg) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        toast(successMsg);
+      }).catch(function () { promptForCopy(text); });
+    } else {
+      promptForCopy(text);
+    }
+  }
+
+  function mergeSharedPayload(payload) {
+    if (!payload || !Array.isArray(payload.teams)) return false;
+    var addedTeams = 0, addedMembers = 0;
+    payload.teams.forEach(function (incoming) {
+      if (!incoming || typeof incoming.name !== "string" || !incoming.name.trim()) return;
+      var incomingType = incoming.type === "friend" ? "friend" : "enemy";
+      var incomingMembers = Array.isArray(incoming.members) ? incoming.members : [];
+      var existingTeam = teamsState.teams.find(function (t) {
+        return t.name.trim().toLowerCase() === incoming.name.trim().toLowerCase();
+      });
+      if (!existingTeam) {
+        existingTeam = { id: makeId("team"), name: incoming.name.trim(), type: incomingType, members: [], photos: [] };
+        teamsState.teams.push(existingTeam);
+        addedTeams++;
+      }
+      var existingLower = existingTeam.members.map(function (m) { return m.name.trim().toLowerCase(); });
+      incomingMembers.forEach(function (im) {
+        if (!im || typeof im.name !== "string") return;
+        var lower = im.name.trim().toLowerCase();
+        if (!lower || existingLower.indexOf(lower) !== -1) return;
+        existingLower.push(lower);
+        existingTeam.members.push({ id: makeId("member"), name: im.name.trim(), partial: !!im.partial, online: null, lastOnlineAt: null, bmId: im.bmId || null });
+        addedMembers++;
+      });
+    });
+    if (addedTeams > 0 || addedMembers > 0) {
+      saveTeamsState();
+      renderTeamsList();
+      refreshTeamStatuses();
+      toast("📥 共有データを取り込んだ（新規チーム" + addedTeams + "・新規メンバー" + addedMembers + "）");
+    } else {
+      toast("共有データは既存の登録と重複していたため追加なし");
+    }
+    return true;
+  }
+
+  document.getElementById("share-link-btn").addEventListener("click", function () {
+    copyToClipboard(buildShareUrl(), "📤 共有リンクをコピーした");
+  });
+
+  document.getElementById("share-text-btn").addEventListener("click", function () {
+    copyToClipboard(JSON.stringify(buildSharePayload()), "📋 共有テキスト(JSON)をコピーした");
+  });
+
+  var shareImportBox = document.getElementById("share-import-box");
+  document.getElementById("share-import-toggle-btn").addEventListener("click", function () {
+    shareImportBox.hidden = !shareImportBox.hidden;
+  });
+
+  document.getElementById("share-import-btn").addEventListener("click", function () {
+    var textarea = document.getElementById("share-import-textarea");
+    var raw = textarea.value.trim();
+    if (!raw) return;
+    var payload;
+    try { payload = JSON.parse(raw); } catch (e) { toast("⚠ 読み込み失敗：JSON形式が不正"); return; }
+    mergeSharedPayload(payload);
+    textarea.value = "";
+    shareImportBox.hidden = true;
+  });
+
+  function tryImportFromHash() {
+    var hash = location.hash || "";
+    if (hash.indexOf("#share=") !== 0) return;
+    var encoded = hash.slice("#share=".length);
+    var payload = null;
+    try { payload = decodeSharePayload(encoded); } catch (e) { payload = null; }
+    if (payload && Array.isArray(payload.teams)) {
+      var ok = confirm("共有されたリストを読み込みますか？（現在のチームに追加されます）\n含まれるチーム数: " + payload.teams.length);
+      if (ok) mergeSharedPayload(payload);
+    }
+    history.replaceState(null, "", location.pathname + location.search);
+  }
+
+  tryImportFromHash();
+  renderTeamsList();
+  updateTeamsLastChecked();
+  refreshTeamStatuses();
+  setInterval(refreshTeamStatuses, 30000);
+
+  var savedRoomCode = getSavedRoomCode();
+  if (savedRoomCode) {
+    connectToRoom(savedRoomCode, false);
+  } else {
+    var roomModalBackdrop = document.getElementById("room-modal-backdrop");
+    if (roomModalBackdrop) roomModalBackdrop.hidden = false;
+  }
+})();
+</script>
+</body>
+</html>
