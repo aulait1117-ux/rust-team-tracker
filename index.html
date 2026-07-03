@@ -1364,10 +1364,10 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
         return;
       }
 
-      statusEl.textContent = "読み取り中…（初回はモデルのダウンロードで少し時間がかかる）";
+      statusEl.textContent = "読み取り中…（初回は言語データのダウンロードで時間がかかる場合がある。日本語データは特に容量が大きいため少し待つ）";
       readBtn.disabled = true;
 
-      window.Tesseract.recognize(cropCanvas, "eng")
+      window.Tesseract.recognize(cropCanvas, "eng+jpn")
         .then(function (result) {
           readBtn.disabled = false;
           var text = ((result && result.data && result.data.text) || "").replace(/\s+/g, " ").trim();
