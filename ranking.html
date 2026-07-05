@@ -279,6 +279,7 @@
       <input type="number" id="f-kills" placeholder="キル" min="0" />
       <input type="number" id="f-deaths" placeholder="デス" min="0" />
       <input type="number" id="f-playtime" placeholder="プレイ時間(h)" min="0" step="0.1" />
+      <button class="btn-ghost" id="f-playtime-fetch-btn" type="button" title="敵チーム監視でBattleMetrics IDが紐付いていれば自動取得できる">⏱ 自動取得</button>
       <button id="f-submit-btn" type="button">＋ 追加</button>
       <button id="f-cancel-btn" type="button" hidden>キャンセル</button>
     </div>
@@ -309,7 +310,7 @@
   </section>
 
   <footer>
-    <strong>データソース：</strong> <a href="https://rustoria.co/leaderboards" target="_blank" rel="noopener">rustoria.co/leaderboards</a> でメンバー名を検索し、表示された数値を手動で入力する（自動取得はしない）。<br />
+    <strong>データソース：</strong> 木・石・金属鉱石・硫黄は<a href="https://rustoria.co/leaderboards" target="_blank" rel="noopener">rustoria.co/leaderboards</a>を見て手入力（コピペ解析ボタンあり）。プレイ時間は敵チーム監視でBattleMetrics IDが紐付いていれば「⏱ 自動取得」で取得できる。キル・デスは自動取得できるデータソースが見つからず手入力のみ（rustoria.co・BattleMetricsともにこのサーバーでは公開していない）。<br />
     <strong>仕組み：</strong> 入力したデータは敵チーム監視ツールと同じルームにリアルタイム保存され、同じルームコードを知っている人全員と共有・編集できる。列見出しをクリックするとその項目で並び替えられる。
   </footer>
 </div>
@@ -410,6 +411,9 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
   var firebaseApp = initializeApp(firebaseConfig);
   var db = getDatabase(firebaseApp);
 
+  var BM_SERVER_ID = "6324892"; // Rustoria US Main, same server index.html tracks
+  var BM_PLAYTIME_PAGE_CAP = 20; // ~100 players/page -> searches roughly the top 2000 by playtime
+
   function makeId() { return "e-" + Math.floor(Math.random() * 1e9) + "-" + Date.now().toString(36); }
 
   function toast(msg) {
@@ -478,14 +482,19 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     });
   }
 
+  var memberBmIdByName = {};
+
   function fillMemberDatalist(teams) {
     var datalist = document.getElementById("member-names");
     if (!datalist) return;
     var names = [];
+    memberBmIdByName = {};
     teams.forEach(function (t) {
       if (t.type !== "friend") return;
       (normalizeRemoteValue(t.members)).forEach(function (m) {
-        if (m && m.name && names.indexOf(m.name) === -1) names.push(m.name);
+        if (!m || !m.name) return;
+        if (names.indexOf(m.name) === -1) names.push(m.name);
+        if (m.bmId) memberBmIdByName[m.name.toLowerCase()] = m.bmId;
       });
     });
     datalist.innerHTML = names.map(function (n) { return '<option value="' + escapeHtml(n) + '"></option>'; }).join("");
@@ -738,6 +747,64 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     } else {
       toast("⚠ 数値を読み取れなかった。手入力してほしい");
     }
+  });
+
+  // ---------- playtime auto-fetch: BattleMetrics' public per-server "time" leaderboard ----------
+  // Anonymous access only lists top players (no direct single-player lookup), so this pages
+  // through the ranking looking for a matching BattleMetrics player id -- the same id already
+  // linked per member in the enemy-watch tool (index.html) for online-status tracking.
+  function findPlaytimeSecondsByBmId(bmId) {
+    var url = "https://api.battlemetrics.com/servers/" + BM_SERVER_ID +
+      "/relationships/leaderboards/time?filter%5Bperiod%5D=AT&page%5Bsize%5D=100";
+    var page = 0;
+    function step() {
+      page++;
+      return fetch(url).then(function (res) {
+        if (!res.ok) throw new Error("BM leaderboard request failed: " + res.status);
+        return res.json();
+      }).then(function (json) {
+        var rows = json.data || [];
+        var hit = rows.find(function (r) { return String(r.id) === String(bmId); });
+        if (hit) return hit.attributes.value;
+        if (json.links && json.links.next && page < BM_PLAYTIME_PAGE_CAP) {
+          url = json.links.next;
+          return step();
+        }
+        return null;
+      });
+    }
+    return step();
+  }
+
+  document.getElementById("f-playtime-fetch-btn").addEventListener("click", function () {
+    var name = document.getElementById("f-name").value.trim();
+    if (!name) {
+      toast("⚠ 先に名前を入力してほしい（敵チーム監視に登録済みの名前と一致させる必要がある）");
+      return;
+    }
+    var bmId = memberBmIdByName[name.toLowerCase()];
+    if (!bmId) {
+      toast("⚠ このメンバーは敵チーム監視でBattleMetrics IDがまだ紐付いていない（そちらで名前検索してリンクしてほしい）");
+      return;
+    }
+    var btn = document.getElementById("f-playtime-fetch-btn");
+    btn.disabled = true;
+    btn.textContent = "検索中…";
+    findPlaytimeSecondsByBmId(bmId).then(function (seconds) {
+      if (seconds == null) {
+        toast("⚠ プレイ時間ランキングの上位圏内に見つからなかった。手入力してほしい");
+        return;
+      }
+      var hours = Math.round((seconds / 3600) * 10) / 10;
+      document.getElementById("f-playtime").value = hours;
+      toast("✓ プレイ時間を自動取得した（" + hours + "時間）");
+    }).catch(function (err) {
+      console.error("playtime fetch failed:", err);
+      toast("⚠ BattleMetricsへの問い合わせに失敗した");
+    }).finally(function () {
+      btn.disabled = false;
+      btn.textContent = "⏱ 自動取得";
+    });
   });
 
   function connectToRoom(code, seedIfEmpty) {
