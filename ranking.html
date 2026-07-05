@@ -276,6 +276,7 @@
       <input type="number" id="f-stone" placeholder="石" min="0" />
       <input type="number" id="f-metal" placeholder="金属鉱石" min="0" />
       <input type="number" id="f-sulfur" placeholder="硫黄鉱石" min="0" />
+      <button class="btn-ghost" id="f-resources-fetch-btn" type="button" title="rustoria.coから名前検索して自動取得(中継サーバー経由)">🌾 自動取得</button>
       <input type="number" id="f-kills" placeholder="キル" min="0" />
       <input type="number" id="f-deaths" placeholder="デス" min="0" />
       <input type="number" id="f-playtime" placeholder="プレイ時間(h)" min="0" step="0.1" />
@@ -413,6 +414,11 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
 
   var BM_SERVER_ID = "6324892"; // Rustoria US Main, same server index.html tracks
   var BM_PLAYTIME_PAGE_CAP = 20; // ~100 players/page -> searches roughly the top 2000 by playtime
+
+  // api.rustoria.co has no Access-Control-Allow-Origin header, so it can't be called directly
+  // from this page. This Cloudflare Worker fetches it server-side and re-serves the same
+  // response with CORS allowed for this site. See rustoria-proxy-worker/worker.js.
+  var RUSTORIA_PROXY_URL = "https://rustoria-resources-proxy.aulait11-17.workers.dev";
 
   function makeId() { return "e-" + Math.floor(Math.random() * 1e9) + "-" + Date.now().toString(36); }
 
@@ -804,6 +810,62 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     }).finally(function () {
       btn.disabled = false;
       btn.textContent = "⏱ 自動取得";
+    });
+  });
+
+  // ---------- resources auto-fetch: rustoria.co's own "resources" statistic bundle, via proxy ----------
+  // Exact-name search only (no full-listing fallback -- rustoria.co paginates 10 rows at a time,
+  // so scanning to find someone outside the search match isn't practical). If a name isn't found
+  // (typo, name changed, etc.), paste-parse or manual entry cover that case.
+  function fetchResourcesFromRustoria(name) {
+    var url = RUSTORIA_PROXY_URL + "?from=0&sortBy=total&orderBy=desc&username=" + encodeURIComponent(name);
+    return fetch(url).then(function (res) {
+      if (!res.ok) throw new Error("proxy request failed: " + res.status);
+      return res.json();
+    }).then(function (json) {
+      var rows = json.leaderboard || [];
+      if (rows.length === 0) return { found: false };
+      if (rows.length > 1) return { found: false, multiple: true, count: rows.length };
+      var d = rows[0].data || {};
+      return {
+        found: true,
+        wood: d.farming_resource_wood_harvested || 0,
+        stone: d.farming_resource_stone_harvested || 0,
+        metalOre: d.farming_resource_metal_harvested || 0,
+        sulfur: d.farming_resource_sulfur_harvested || 0
+      };
+    });
+  }
+
+  document.getElementById("f-resources-fetch-btn").addEventListener("click", function () {
+    var name = document.getElementById("f-name").value.trim();
+    if (!name) {
+      toast("⚠ 先に名前を入力してほしい");
+      return;
+    }
+    var btn = document.getElementById("f-resources-fetch-btn");
+    btn.disabled = true;
+    btn.textContent = "検索中…";
+    fetchResourcesFromRustoria(name).then(function (result) {
+      if (result.multiple) {
+        toast("⚠ 同名候補が" + result.count + "件見つかった。rustoria.co側で確認して手入力してほしい");
+        return;
+      }
+      if (!result.found) {
+        toast("⚠ rustoria.coで見つからなかった（名前が違うかも）。コピペ解析か手入力を使ってほしい");
+        return;
+      }
+      document.getElementById("f-wood").value = result.wood;
+      document.getElementById("f-stone").value = result.stone;
+      document.getElementById("f-metal").value = result.metalOre;
+      document.getElementById("f-sulfur").value = result.sulfur;
+      toast("✓ rustoria.coから資源量を自動取得した");
+    }).catch(function (err) {
+      console.error("resources fetch failed:", err);
+      toast("⚠ rustoria.coへの問い合わせに失敗した");
+    }).finally(function () {
+      btn.disabled = false;
+      btn.textContent = "🌾 自動取得";
     });
   });
 
