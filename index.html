@@ -309,6 +309,11 @@
     flex: 1; min-width: 100px; background: var(--surface-raised); border: 1px solid var(--line); color: var(--text);
     font-size: 13px; padding: 6px 8px; border-radius: 3px;
   }
+  .member-row input.steamid-input {
+    flex: 0 1 130px; min-width: 90px; font-family: var(--font-mono); font-size: 11px;
+  }
+  .steamid-link { flex: none; color: var(--text-faint); text-decoration: none; font-size: 13px; }
+  .steamid-link:hover { color: var(--rust-bright); }
   .member-partial { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-faint); white-space: nowrap; flex: none; }
   .status-pill {
     flex: none; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.03em;
@@ -701,6 +706,17 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
   function makeId(prefix) { return prefix + "-" + Math.floor(Math.random() * 1e9) + "-" + Date.now().toString(36); }
 
+  // Reference-only Steam ID/profile link (BattleMetrics' public search can't resolve a Steam ID
+  // to a player anonymously, so this is NOT used for BM ID linking -- just a manual identity check).
+  function steamProfileUrl(raw) {
+    if (!raw) return null;
+    var s = String(raw).trim();
+    if (!s) return null;
+    if (/^https?:\/\//i.test(s)) return s;
+    if (/^\d{6,20}$/.test(s)) return "https://steamcommunity.com/profiles/" + s;
+    return null;
+  }
+
   var DEFAULT_TEAMS_STATE = { teams: [] };
   function loadTeamsState() {
     try {
@@ -714,6 +730,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
         if (!Array.isArray(t.members)) t.members = [];
         t.members.forEach(function (m) {
           if (m.bmId == null) m.bmId = null;
+          if (m.steamId == null) m.steamId = "";
           if (!Array.isArray(m.sessions)) m.sessions = [];
         });
       });
@@ -788,6 +805,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
                 name: rm.name,
                 partial: !!rm.partial,
                 bmId: rm.bmId || null,
+                steamId: rm.steamId || "",
                 sessions: Array.isArray(rm.sessions) ? rm.sessions : [],
                 online: localMember ? (localMember.online === true || localMember.online === false ? localMember.online : null) : null,
                 lastOnlineAt: localMember ? (localMember.lastOnlineAt || null) : null
@@ -807,7 +825,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
         type: t.type === "friend" ? "friend" : "enemy",
         photos: Array.isArray(t.photos) ? t.photos : [],
         members: (Array.isArray(t.members) ? t.members : []).map(function (m) {
-          return { id: m.id, name: m.name, partial: !!m.partial, bmId: m.bmId || null, sessions: Array.isArray(m.sessions) ? m.sessions : [] };
+          return { id: m.id, name: m.name, partial: !!m.partial, bmId: m.bmId || null, steamId: m.steamId || "", sessions: Array.isArray(m.sessions) ? m.sessions : [] };
         })
       };
     });
@@ -1800,6 +1818,31 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
           refreshTeamStatuses();
         });
 
+        var steamIdInput = document.createElement("input");
+        steamIdInput.type = "text";
+        steamIdInput.className = "steamid-input";
+        steamIdInput.value = member.steamId || "";
+        steamIdInput.placeholder = "Steam ID（任意）";
+        steamIdInput.setAttribute("aria-label", member.name + " のSteam ID");
+        steamIdInput.title = "参照用（BattleMetrics連携には使われない）";
+        steamIdInput.addEventListener("change", function () {
+          member.steamId = steamIdInput.value.trim();
+          saveTeamsState();
+          renderTeamsList();
+        });
+
+        var steamLink = null;
+        var steamUrl = steamProfileUrl(member.steamId);
+        if (steamUrl) {
+          steamLink = document.createElement("a");
+          steamLink.className = "steamid-link";
+          steamLink.href = steamUrl;
+          steamLink.target = "_blank";
+          steamLink.rel = "noopener";
+          steamLink.title = "Steamプロフィールを開く";
+          steamLink.textContent = "🔗";
+        }
+
         var partialLabel = document.createElement("label");
         partialLabel.className = "member-partial";
         var partialCb = document.createElement("input");
@@ -1888,6 +1931,8 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
         });
 
         row.appendChild(mNameInput);
+        row.appendChild(steamIdInput);
+        if (steamLink) row.appendChild(steamLink);
         row.appendChild(partialLabel);
         row.appendChild(pill);
         row.appendChild(lastSeenEl);
@@ -1903,7 +1948,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
       card.appendChild(membersWrap);
 
       function addMemberWithName(name, bmId) {
-        team.members.push({ id: makeId("member"), name: name, partial: false, online: null, lastOnlineAt: null, bmId: bmId || null, sessions: [] });
+        team.members.push({ id: makeId("member"), name: name, partial: false, online: null, lastOnlineAt: null, bmId: bmId || null, steamId: "", sessions: [] });
         saveTeamsState();
         renderTeamsList();
         refreshTeamStatuses();
@@ -1936,7 +1981,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
           var lower = name.toLowerCase();
           if (existingLower.indexOf(lower) !== -1) return;
           existingLower.push(lower);
-          team.members.push({ id: makeId("member"), name: name, partial: false, online: null, lastOnlineAt: null, bmId: null, sessions: [] });
+          team.members.push({ id: makeId("member"), name: name, partial: false, online: null, lastOnlineAt: null, bmId: null, steamId: "", sessions: [] });
           addedCount++;
         });
         bulkTextarea.value = "";
@@ -2164,7 +2209,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
           name: t.name,
           type: t.type === "friend" ? "friend" : "enemy",
           members: t.members.map(function (m) {
-            return { name: m.name, partial: !!m.partial, bmId: m.bmId || null };
+            return { name: m.name, partial: !!m.partial, bmId: m.bmId || null, steamId: m.steamId || "" };
           })
         };
       })
@@ -2222,7 +2267,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
         var lower = im.name.trim().toLowerCase();
         if (!lower || existingLower.indexOf(lower) !== -1) return;
         existingLower.push(lower);
-        existingTeam.members.push({ id: makeId("member"), name: im.name.trim(), partial: !!im.partial, online: null, lastOnlineAt: null, bmId: im.bmId || null, sessions: [] });
+        existingTeam.members.push({ id: makeId("member"), name: im.name.trim(), partial: !!im.partial, online: null, lastOnlineAt: null, bmId: im.bmId || null, steamId: im.steamId || "", sessions: [] });
         addedMembers++;
       });
     });
