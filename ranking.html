@@ -151,6 +151,7 @@
   }
   .entry-form input::placeholder { color: var(--text-faint); }
   .entry-form input#f-name { flex: 1 1 160px; min-width: 120px; }
+  .entry-form input#f-steamid { flex: 1 1 200px; min-width: 160px; font-family: var(--font-mono); font-size: 12px; }
   .entry-form input[type="number"] { width: 100px; }
   .entry-form button {
     background: var(--surface-raised); border: 1px solid var(--line); color: var(--text-muted);
@@ -158,6 +159,22 @@
   }
   .entry-form button:hover { color: var(--rust-bright); border-color: var(--rust); }
   .entry-form button#f-submit-btn { border-color: var(--rust); color: var(--rust-bright); }
+
+  .paste-bar { margin-bottom: 8px; }
+  .paste-box {
+    display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px;
+    padding: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px;
+  }
+  .paste-box[hidden] { display: none; }
+  .paste-box p { margin: 0; font-size: 12.5px; color: var(--text-muted); line-height: 1.6; }
+  .paste-box textarea {
+    background: var(--surface-raised); border: 1px solid var(--line); color: var(--text);
+    font-family: var(--font-mono); font-size: 12px; padding: 8px 10px; border-radius: 3px; resize: vertical;
+  }
+  .paste-box textarea::placeholder { color: var(--text-faint); }
+  .paste-box button { align-self: flex-start; }
+  .steamid-link { color: var(--text-muted); font-size: 11px; margin-left: 6px; text-decoration: none; }
+  .steamid-link:hover { color: var(--rust-bright); }
 
   .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 4px; }
   table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
@@ -242,9 +259,19 @@
       </div>
     </div>
 
+    <div class="paste-bar">
+      <button class="btn-ghost" id="paste-toggle-btn" type="button">📋 rustoria.coの表示をコピペして自動入力</button>
+    </div>
+    <div class="paste-box" id="paste-box" hidden>
+      <p>rustoria.coでメンバーのページを開き、木・石・金属鉱石・硫黄の表示部分をドラッグしてコピー(Ctrl+C)し、下に貼り付けてほしい。数値だけ自動で読み取って上のフォームに入れる（キル・デス・プレイ時間はrustoria.co側に無いので対象外）。</p>
+      <textarea id="paste-textarea" rows="4" placeholder="ここに貼り付け…"></textarea>
+      <button class="btn-ghost" id="paste-parse-btn" type="button">🔍 解析してフォームに入力</button>
+    </div>
+
     <div class="entry-form" id="entry-form">
       <input list="member-names" id="f-name" placeholder="名前" type="text" />
       <datalist id="member-names"></datalist>
+      <input type="text" id="f-steamid" placeholder="Steam ID / プロフィールURL（任意）" />
       <input type="number" id="f-wood" placeholder="木" min="0" />
       <input type="number" id="f-stone" placeholder="石" min="0" />
       <input type="number" id="f-metal" placeholder="金属鉱石" min="0" />
@@ -427,6 +454,23 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
   function computeTotal(e) { return (e.wood || 0) + (e.stone || 0) + (e.metalOre || 0) + (e.sulfur || 0); }
   function computeKD(e) { var d = e.deaths || 0; var k = e.kills || 0; return d > 0 ? k / d : k; }
 
+  // Steam IDs are unique per person (unlike in-game display names), so use them as the
+  // authoritative dedup key when available. Tolerant of a raw SteamID64 or a pasted profile URL.
+  function steamIdKey(raw) {
+    if (!raw) return "";
+    var digits = String(raw).match(/\d{6,20}/);
+    if (digits) return digits[0];
+    return String(raw).trim().toLowerCase();
+  }
+  function steamProfileUrl(raw) {
+    if (!raw) return null;
+    var s = String(raw).trim();
+    if (!s) return null;
+    if (/^https?:\/\//i.test(s)) return s;
+    if (/^\d{6,20}$/.test(s)) return "https://steamcommunity.com/profiles/" + s;
+    return null;
+  }
+
   function syncEntriesToFirebase() {
     if (!rankingDbRef) return;
     set(rankingDbRef, entries).catch(function () {
@@ -500,10 +544,14 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
       var rank = i + 1;
       var rankClass = rank === 1 ? "rank-1" : rank === 2 ? "rank-2" : rank === 3 ? "rank-3" : "";
       var rankLabel = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : rank;
+      var profileUrl = steamProfileUrl(e.steamId);
+      var nameHtml = escapeHtml(e.name) + (profileUrl
+        ? ' <a class="steamid-link" href="' + escapeHtml(profileUrl) + '" target="_blank" rel="noopener" title="Steamプロフィールを開く">🔗</a>'
+        : '');
       return (
         '<tr>' +
         '<td class="rank-cell ' + rankClass + '">' + rankLabel + '</td>' +
-        '<td class="name-cell">' + escapeHtml(e.name) + '</td>' +
+        '<td class="name-cell">' + nameHtml + '</td>' +
         '<td>' + formatNum(e.wood) + '</td>' +
         '<td>' + formatNum(e.stone) + '</td>' +
         '<td>' + formatNum(e.metalOre) + '</td>' +
@@ -557,6 +605,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
   function readForm() {
     return {
       name: document.getElementById("f-name").value.trim(),
+      steamId: document.getElementById("f-steamid").value.trim(),
       wood: Number(document.getElementById("f-wood").value) || 0,
       stone: Number(document.getElementById("f-stone").value) || 0,
       metalOre: Number(document.getElementById("f-metal").value) || 0,
@@ -568,7 +617,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
   }
 
   function clearForm() {
-    ["f-name", "f-wood", "f-stone", "f-metal", "f-sulfur", "f-kills", "f-deaths", "f-playtime"].forEach(function (id) {
+    ["f-name", "f-steamid", "f-wood", "f-stone", "f-metal", "f-sulfur", "f-kills", "f-deaths", "f-playtime"].forEach(function (id) {
       document.getElementById(id).value = "";
     });
   }
@@ -578,6 +627,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     if (!e) return;
     editingId = id;
     document.getElementById("f-name").value = e.name;
+    document.getElementById("f-steamid").value = e.steamId || "";
     document.getElementById("f-wood").value = e.wood || "";
     document.getElementById("f-stone").value = e.stone || "";
     document.getElementById("f-metal").value = e.metalOre || "";
@@ -618,15 +668,24 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
         existing.updatedAt = Date.now();
       }
     } else {
-      // Rust does not enforce unique display names, so a name match alone never implies
-      // it's the same person -- always add as a new row. Only "編集" (by id) may overwrite.
-      var sameName = entries.filter(function (x) { return x.name.toLowerCase() === form.name.toLowerCase(); });
-      if (sameName.length) {
-        toast("⚠ 同じ名前が" + sameName.length + "件すでにある（別人の可能性があるため上書きせず新規追加した）");
+      // Steam ID uniquely identifies a person, so a match there is trusted as "same person".
+      // A name match alone is NOT trusted -- Rust doesn't enforce unique display names --
+      // so it always adds a new row (with a warning) instead of silently overwriting someone else.
+      var formKey = steamIdKey(form.steamId);
+      var bySteamId = formKey ? entries.find(function (x) { return steamIdKey(x.steamId) === formKey; }) : null;
+      if (bySteamId) {
+        Object.assign(bySteamId, form);
+        bySteamId.updatedAt = Date.now();
+        toast("同じSteam IDの記録を更新した（" + bySteamId.name + "）");
+      } else {
+        var sameName = entries.filter(function (x) { return x.name.toLowerCase() === form.name.toLowerCase(); });
+        if (sameName.length) {
+          toast("⚠ 同じ名前が" + sameName.length + "件すでにある（別人の可能性があるため上書きせず新規追加した。Steam IDを入れておくと次から自動で判定できる）");
+        }
+        form.id = makeId();
+        form.updatedAt = Date.now();
+        entries.push(form);
       }
-      form.id = makeId();
-      form.updatedAt = Date.now();
-      entries.push(form);
     }
     syncEntriesToFirebase();
     renderTable();
@@ -636,6 +695,49 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
   document.getElementById("f-cancel-btn").addEventListener("click", cancelEdit);
   document.getElementById("f-name").addEventListener("keydown", function (e) {
     if (e.key === "Enter") { e.preventDefault(); document.getElementById("f-submit-btn").click(); }
+  });
+
+  // ---------- paste-to-autofill: parse text copied straight off rustoria.co's own page ----------
+  // No network request involved (so no CORS issue) -- just reads whatever the user pasted.
+  // Rustoria labels these "Wood Harvested" / "Stones Harvested" / "Metal Ore Harvested" /
+  // "Sulfur Ore Harvested" per their public statistics/mappings endpoint; kills/deaths/playtime
+  // aren't tracked there at all, so this intentionally only targets the 4 resources.
+  function parsePastedStats(text) {
+    function findNum(labelRegex) {
+      var m = text.match(labelRegex);
+      if (!m) return null;
+      return Number(m[1].replace(/,/g, ""));
+    }
+    return {
+      wood: findNum(/Wood\s*Harvested[^\d]{0,20}([\d,]+)/i),
+      stone: findNum(/Stones?\s*Harvested[^\d]{0,20}([\d,]+)/i),
+      metalOre: findNum(/(?<!HQ\s)Metal\s*Ore\s*Harvested[^\d]{0,20}([\d,]+)/i),
+      sulfur: findNum(/Sulfur\s*Ore\s*Harvested[^\d]{0,20}([\d,]+)/i)
+    };
+  }
+
+  document.getElementById("paste-toggle-btn").addEventListener("click", function () {
+    var box = document.getElementById("paste-box");
+    box.hidden = !box.hidden;
+  });
+
+  document.getElementById("paste-parse-btn").addEventListener("click", function () {
+    var text = document.getElementById("paste-textarea").value;
+    if (!text.trim()) {
+      toast("⚠ 貼り付けるテキストがない");
+      return;
+    }
+    var parsed = parsePastedStats(text);
+    var found = [];
+    if (parsed.wood != null) { document.getElementById("f-wood").value = parsed.wood; found.push("木"); }
+    if (parsed.stone != null) { document.getElementById("f-stone").value = parsed.stone; found.push("石"); }
+    if (parsed.metalOre != null) { document.getElementById("f-metal").value = parsed.metalOre; found.push("金属鉱石"); }
+    if (parsed.sulfur != null) { document.getElementById("f-sulfur").value = parsed.sulfur; found.push("硫黄鉱石"); }
+    if (found.length) {
+      toast("✓ " + found.join("・") + " を読み取ってフォームに入力した（名前とSteam IDは自分で入れてほしい）");
+    } else {
+      toast("⚠ 数値を読み取れなかった。手入力してほしい");
+    }
   });
 
   function connectToRoom(code, seedIfEmpty) {
