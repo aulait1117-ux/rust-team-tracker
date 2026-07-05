@@ -489,21 +489,40 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
   }
 
   var memberBmIdByName = {};
+  var memberSessionsByName = {};
 
   function fillMemberDatalist(teams) {
     var datalist = document.getElementById("member-names");
     if (!datalist) return;
     var names = [];
     memberBmIdByName = {};
+    memberSessionsByName = {};
     teams.forEach(function (t) {
       if (t.type !== "friend") return;
       (normalizeRemoteValue(t.members)).forEach(function (m) {
         if (!m || !m.name) return;
         if (names.indexOf(m.name) === -1) names.push(m.name);
         if (m.bmId) memberBmIdByName[m.name.toLowerCase()] = m.bmId;
+        if (Array.isArray(m.sessions)) memberSessionsByName[m.name.toLowerCase()] = m.sessions;
       });
     });
     datalist.innerHTML = names.map(function (n) { return '<option value="' + escapeHtml(n) + '"></option>'; }).join("");
+  }
+
+  // Fallback playtime source: the enemy-watch tool (index.html) records {start, end} per online
+  // session locally while it's running (45s poll resolution). Not as accurate as BattleMetrics'
+  // own leaderboard, but it's the only playtime data available for members BM doesn't rank.
+  function computeLocalPlaytimeHours(sessions) {
+    if (!sessions || !sessions.length) return null;
+    var totalMs = 0;
+    var now = Date.now();
+    sessions.forEach(function (s) {
+      if (!s || typeof s.start !== "number") return;
+      var end = typeof s.end === "number" ? s.end : now;
+      if (end > s.start) totalMs += (end - s.start);
+    });
+    if (totalMs <= 0) return null;
+    return Math.round((totalMs / 3600000) * 10) / 10;
   }
 
   function escapeHtml(s) {
@@ -797,13 +816,21 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     btn.disabled = true;
     btn.textContent = "検索中…";
     findPlaytimeSecondsByBmId(bmId).then(function (seconds) {
-      if (seconds == null) {
-        toast("⚠ プレイ時間ランキングの上位圏内に見つからなかった。手入力してほしい");
+      if (seconds != null) {
+        var hours = Math.round((seconds / 3600) * 10) / 10;
+        document.getElementById("f-playtime").value = hours;
+        toast("✓ プレイ時間を自動取得した（" + hours + "時間、BattleMetrics）");
         return;
       }
-      var hours = Math.round((seconds / 3600) * 10) / 10;
-      document.getElementById("f-playtime").value = hours;
-      toast("✓ プレイ時間を自動取得した（" + hours + "時間）");
+      // Not on BattleMetrics' own leaderboard -- fall back to summing this tool's own
+      // locally-recorded online sessions (less accurate, but better than nothing).
+      var localHours = computeLocalPlaytimeHours(memberSessionsByName[name.toLowerCase()]);
+      if (localHours == null) {
+        toast("⚠ BattleMetricsにもローカル記録にも見つからなかった。手入力してほしい");
+        return;
+      }
+      document.getElementById("f-playtime").value = localHours;
+      toast("✓ プレイ時間を推定取得した（" + localHours + "時間、敵チーム監視のローカル記録から計算。±45秒の誤差あり）");
     }).catch(function (err) {
       console.error("playtime fetch failed:", err);
       toast("⚠ BattleMetricsへの問い合わせに失敗した");
