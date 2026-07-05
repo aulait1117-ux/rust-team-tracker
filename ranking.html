@@ -1,0 +1,723 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rustoria US Main – ファームランキング</title>
+<style>
+  :root {
+    --ink: #101315;
+    --surface: #1a1e21;
+    --surface-raised: #21262a;
+    --line: #33393d;
+    --line-soft: #262b2e;
+    --text: #eae6df;
+    --text-muted: #9ba0a4;
+    --text-faint: #676c70;
+    --rust: #c8622f;
+    --rust-bright: #e2793f;
+    --moss: #6ea15a;
+    --amber: #d9a441;
+    --alert: #c94f3f;
+    --gold: #d9b23c;
+    --silver: #b9c0c4;
+    --bronze: #c9793f;
+
+    --font-display: "Bahnschrift SemiBold", "Segoe UI Semibold", "Arial Narrow", sans-serif;
+    --font-body: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", sans-serif;
+    --font-mono: "Cascadia Mono", "Consolas", "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--ink);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  body {
+    background-image:
+      radial-gradient(ellipse 1000px 560px at 12% -8%, rgba(200, 98, 47, 0.09), transparent 58%),
+      radial-gradient(ellipse 800px 460px at 100% 0%, rgba(110, 161, 90, 0.05), transparent 55%),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px);
+  }
+  a { color: var(--rust-bright); }
+  button { font-family: inherit; }
+  :focus-visible { outline: 2px solid var(--rust-bright); outline-offset: 2px; }
+
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 0 20px 70px; }
+
+  /* ---------- lock gate ---------- */
+  #app-content { display: none; }
+  #app-content.unlocked { display: block; }
+
+  .lock-gate-backdrop {
+    position: fixed; inset: 0; background: var(--ink); z-index: 200;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .lock-gate-backdrop[hidden] { display: none; }
+  .lock-gate {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 26px 28px;
+    max-width: 360px; width: 100%; text-align: center;
+  }
+  .lock-gate h2 {
+    margin: 0 0 8px; font-family: var(--font-display); font-weight: 700; font-size: 17px;
+    text-transform: uppercase; letter-spacing: 0.04em; color: var(--text);
+  }
+  .lock-gate p { margin: 0 0 16px; font-size: 13px; color: var(--text-muted); }
+  .lock-gate-row { display: flex; gap: 8px; }
+  .lock-gate-row input[type="password"] {
+    flex: 1; background: var(--surface-raised); border: 1px solid var(--line); color: var(--text);
+    font-size: 14px; padding: 9px 10px; border-radius: 3px; text-align: center; letter-spacing: 0.2em;
+    font-family: var(--font-mono);
+  }
+  .lock-gate-row button { white-space: nowrap; }
+  .lock-gate-error { margin-top: 10px; font-size: 12.5px; color: var(--alert); }
+  .lock-gate-error[hidden] { display: none; }
+
+  /* ---------- page header ---------- */
+  .page-head { padding: 26px 0 4px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .page-head .eyebrow {
+    display: block; margin-bottom: 4px;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.13em;
+    text-transform: uppercase; color: var(--rust-bright);
+  }
+  .page-head h1 {
+    margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 22px;
+    letter-spacing: 0.02em; text-transform: uppercase; text-wrap: balance;
+  }
+
+  .btn-ghost {
+    background: transparent; border: 1px solid var(--line); color: var(--text-muted);
+    font-size: 12.5px; padding: 7px 12px; border-radius: 3px; cursor: pointer; text-decoration: none;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-ghost:hover { border-color: var(--rust); color: var(--rust-bright); }
+
+  .hero-meta { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--text-muted); }
+  .hero-meta b { color: var(--text); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+  /* ---------- room (Firebase realtime sync, shared with index.html) ---------- */
+  .room-bar {
+    margin-top: 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    padding: 10px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px;
+  }
+  .room-bar-status { font-family: var(--font-mono); font-size: 13px; color: var(--text-muted); }
+  .room-bar-status b { color: var(--rust-bright); letter-spacing: 0.1em; }
+  .room-bar-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .room-modal-backdrop {
+    position: fixed; inset: 0; background: rgba(8,9,10,0.88); z-index: 110;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .room-modal-backdrop[hidden] { display: none; }
+  .room-modal {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 24px;
+    max-width: 440px; width: 100%;
+  }
+  .room-modal h2 {
+    margin: 0 0 10px; font-family: var(--font-display); font-size: 16px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.04em; color: var(--text);
+  }
+  .room-modal p { margin: 0 0 16px; font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+  .room-modal-row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .room-modal-row input[type="text"] {
+    flex: 1; background: var(--surface-raised); border: 1px solid var(--line); color: var(--text);
+    font-size: 13px; padding: 8px 10px; border-radius: 3px; text-transform: uppercase; font-family: var(--font-mono);
+  }
+  .room-modal-row button { white-space: nowrap; }
+  .room-modal-divider { text-align: center; font-size: 11px; color: var(--text-faint); margin: 12px 0; }
+
+  /* ---------- ranking section ---------- */
+  .ranking-section { margin-top: 22px; }
+  .ranking-topbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .ranking-topbar h2 {
+    margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 16px;
+    letter-spacing: 0.03em; text-transform: uppercase; color: var(--text);
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .entry-form {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px;
+    padding: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px;
+  }
+  .entry-form input {
+    background: var(--surface-raised); border: 1px solid var(--line); color: var(--text);
+    font-size: 13px; padding: 8px 10px; border-radius: 3px;
+  }
+  .entry-form input::placeholder { color: var(--text-faint); }
+  .entry-form input#f-name { flex: 1 1 160px; min-width: 120px; }
+  .entry-form input[type="number"] { width: 100px; }
+  .entry-form button {
+    background: var(--surface-raised); border: 1px solid var(--line); color: var(--text-muted);
+    font-size: 13px; padding: 8px 14px; border-radius: 3px; cursor: pointer; white-space: nowrap;
+  }
+  .entry-form button:hover { color: var(--rust-bright); border-color: var(--rust); }
+  .entry-form button#f-submit-btn { border-color: var(--rust); color: var(--rust-bright); }
+
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  thead th {
+    text-align: right; padding: 9px 10px; background: var(--surface-raised); color: var(--text-muted);
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
+    white-space: nowrap; cursor: pointer; user-select: none; border-bottom: 1px solid var(--line);
+  }
+  thead th:first-child, thead th:nth-child(2) { text-align: left; }
+  thead th:hover { color: var(--rust-bright); }
+  thead th.sorted { color: var(--rust-bright); }
+  thead th.sorted::after { content: attr(data-arrow); margin-left: 4px; }
+  tbody td {
+    padding: 9px 10px; text-align: right; font-variant-numeric: tabular-nums;
+    border-bottom: 1px solid var(--line-soft); white-space: nowrap;
+  }
+  tbody td:first-child, tbody td:nth-child(2) { text-align: left; }
+  tbody tr:hover { background: rgba(255,255,255,0.02); }
+  tbody tr:last-child td { border-bottom: none; }
+  .rank-cell { font-family: var(--font-mono); color: var(--text-muted); }
+  .rank-1 { color: var(--gold); font-weight: 700; }
+  .rank-2 { color: var(--silver); font-weight: 700; }
+  .rank-3 { color: var(--bronze); font-weight: 700; }
+  .name-cell { color: var(--text); font-weight: 600; }
+  .total-cell { color: var(--rust-bright); font-weight: 700; }
+  .updated-cell { color: var(--text-faint); font-size: 11.5px; font-family: var(--font-mono); }
+  .row-actions { display: flex; gap: 4px; justify-content: flex-end; }
+  .row-actions button {
+    background: transparent; border: none; color: var(--text-faint); cursor: pointer;
+    font-size: 13px; padding: 2px 5px; border-radius: 3px;
+  }
+  .row-actions button:hover { color: var(--rust-bright); }
+  .row-actions button.del:hover { color: var(--alert); }
+
+  .empty-note { color: var(--text-faint); font-size: 12.5px; padding: 16px; text-align: center; }
+  .empty-note[hidden] { display: none; }
+
+  #toast-stack {
+    position: fixed; right: 16px; bottom: 16px; z-index: 50;
+    display: flex; flex-direction: column; gap: 8px; max-width: 300px;
+  }
+  .toast {
+    background: var(--surface-raised); border: 1px solid var(--alert); color: var(--text);
+    font-size: 13px; padding: 10px 12px; border-radius: 4px; box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+  }
+
+  footer {
+    margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--line);
+    color: var(--text-faint); font-size: 12px; line-height: 1.7;
+  }
+  footer strong { color: var(--text-muted); }
+</style>
+</head>
+<body>
+<div class="wrap" id="app-content">
+  <header class="page-head">
+    <div class="page-head-title">
+      <span class="eyebrow">Rustoria.co · US Main · Vanilla 1x</span>
+      <h1>チームファームランキング</h1>
+    </div>
+    <a class="btn-ghost" href="index.html">🛡 敵チーム監視へ</a>
+  </header>
+
+  <div class="room-bar" id="room-bar">
+    <span class="room-bar-status">ルームコード：<b id="room-code-display">------</b>（敵チーム監視と共通のルーム）</span>
+    <div class="room-bar-actions">
+      <button class="btn-ghost" id="room-copy-btn" type="button">📋 コピー</button>
+      <button class="btn-ghost" id="room-switch-btn" type="button">🔄 別のルームに切り替える</button>
+    </div>
+  </div>
+
+  <section class="ranking-section" aria-labelledby="ranking-head">
+    <div class="ranking-topbar">
+      <h2 id="ranking-head">
+        <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+          <path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4Z"/><path d="M7 6H4a2 2 0 0 0 0 4h1M17 6h3a2 2 0 0 1 0 4h-1"/>
+        </svg>
+        資源ファーム量ランキング
+      </h2>
+      <div class="hero-meta">
+        <span>登録：<b id="entry-count">0</b> 人</span>
+      </div>
+    </div>
+
+    <div class="entry-form" id="entry-form">
+      <input list="member-names" id="f-name" placeholder="名前" type="text" />
+      <datalist id="member-names"></datalist>
+      <input type="number" id="f-wood" placeholder="木" min="0" />
+      <input type="number" id="f-stone" placeholder="石" min="0" />
+      <input type="number" id="f-metal" placeholder="金属鉱石" min="0" />
+      <input type="number" id="f-sulfur" placeholder="硫黄鉱石" min="0" />
+      <input type="number" id="f-kills" placeholder="キル" min="0" />
+      <input type="number" id="f-deaths" placeholder="デス" min="0" />
+      <input type="number" id="f-playtime" placeholder="プレイ時間(h)" min="0" step="0.1" />
+      <button id="f-submit-btn" type="button">＋ 追加</button>
+      <button id="f-cancel-btn" type="button" hidden>キャンセル</button>
+    </div>
+
+    <div class="table-wrap">
+      <table id="ranking-table">
+        <thead>
+          <tr>
+            <th data-sort="rank" style="cursor:default;">#</th>
+            <th data-sort="name">名前</th>
+            <th data-sort="wood">木</th>
+            <th data-sort="stone">石</th>
+            <th data-sort="metalOre">金属鉱石</th>
+            <th data-sort="sulfur">硫黄鉱石</th>
+            <th data-sort="total">合計ファーム</th>
+            <th data-sort="kills">キル</th>
+            <th data-sort="deaths">デス</th>
+            <th data-sort="kd">K/D</th>
+            <th data-sort="playtimeHours">プレイ時間</th>
+            <th style="cursor:default;">更新</th>
+            <th style="cursor:default;"></th>
+          </tr>
+        </thead>
+        <tbody id="ranking-tbody"></tbody>
+      </table>
+      <div class="empty-note" id="ranking-empty" hidden>まだ記録がない。上のフォームからチームメンバーのファーム量を追加してほしい。</div>
+    </div>
+  </section>
+
+  <footer>
+    <strong>データソース：</strong> <a href="https://rustoria.co/leaderboards" target="_blank" rel="noopener">rustoria.co/leaderboards</a> でメンバー名を検索し、表示された数値を手動で入力する（自動取得はしない）。<br />
+    <strong>仕組み：</strong> 入力したデータは敵チーム監視ツールと同じルームにリアルタイム保存され、同じルームコードを知っている人全員と共有・編集できる。列見出しをクリックするとその項目で並び替えられる。
+  </footer>
+</div>
+
+<div id="toast-stack"></div>
+
+<div class="room-modal-backdrop" id="room-modal-backdrop" hidden>
+  <div class="room-modal">
+    <h2>ルームに接続</h2>
+    <p>
+      敵チーム監視ツールと同じ「ルームコード」を入力すると、同じチームのファーム記録を共有できる。
+      新しく作ることもできるが、既存のルームコードを知っているならそちらに参加した方がいい。
+    </p>
+    <div class="room-modal-row">
+      <button class="btn-ghost" id="room-create-btn" type="button">🆕 新しいルームを作る</button>
+    </div>
+    <div class="room-modal-divider">または</div>
+    <div class="room-modal-row">
+      <input type="text" id="room-join-input" placeholder="ルームコードを入力（例：AB12CD）" maxlength="8" />
+      <button class="btn-ghost" id="room-join-btn" type="button">参加する</button>
+    </div>
+  </div>
+</div>
+
+<div class="lock-gate-backdrop" id="lock-gate-backdrop">
+  <div class="lock-gate">
+    <h2>🔒 ロック中</h2>
+    <p>パスワードを入力してください。</p>
+    <div class="lock-gate-row">
+      <input type="password" id="lock-gate-input" placeholder="パスワード" autocomplete="off" />
+      <button class="btn-ghost" id="lock-gate-submit-btn" type="button">解除</button>
+    </div>
+    <div class="lock-gate-error" id="lock-gate-error" hidden>違います</div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-database.js";
+
+(function () {
+  "use strict";
+
+  /* ---------- lock gate: simple deterrent, not real security (shared with index.html) ---------- */
+  (function wireLockGate() {
+    var LOCK_UNLOCKED_KEY = "rustoria-tracker-unlocked";
+    var LOCK_PASSWORD = "0611";
+
+    var backdrop = document.getElementById("lock-gate-backdrop");
+    var appContent = document.getElementById("app-content");
+    var input = document.getElementById("lock-gate-input");
+    var submitBtn = document.getElementById("lock-gate-submit-btn");
+    var errorEl = document.getElementById("lock-gate-error");
+
+    function unlock() {
+      try { localStorage.setItem(LOCK_UNLOCKED_KEY, "1"); } catch (e) { /* ignore */ }
+      if (backdrop) backdrop.hidden = true;
+      if (appContent) appContent.classList.add("unlocked");
+    }
+
+    var alreadyUnlocked = false;
+    try { alreadyUnlocked = localStorage.getItem(LOCK_UNLOCKED_KEY) === "1"; } catch (e) { alreadyUnlocked = false; }
+
+    if (alreadyUnlocked) {
+      unlock();
+      return;
+    }
+
+    function attemptUnlock() {
+      if (!input) return;
+      if (input.value === LOCK_PASSWORD) {
+        unlock();
+      } else {
+        input.value = "";
+        if (errorEl) errorEl.hidden = false;
+        input.focus();
+      }
+    }
+
+    if (submitBtn) submitBtn.addEventListener("click", attemptUnlock);
+    if (input) {
+      input.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); attemptUnlock(); } });
+      input.addEventListener("input", function () { if (errorEl) errorEl.hidden = true; });
+      input.focus();
+    }
+  })();
+
+  var firebaseConfig = {
+    apiKey: "AIzaSyA22qQTD-1v5QBNzd7TuVcf_l8hU5lWPvg",
+    authDomain: "rust-5bfa4.firebaseapp.com",
+    databaseURL: "https://rust-5bfa4-default-rtdb.firebaseio.com",
+    projectId: "rust-5bfa4",
+    storageBucket: "rust-5bfa4.firebasestorage.app",
+    messagingSenderId: "703754076062",
+    appId: "1:703754076062:web:f5460fd28f995eee7c608f",
+    measurementId: "G-S6P26JRYD4"
+  };
+  var firebaseApp = initializeApp(firebaseConfig);
+  var db = getDatabase(firebaseApp);
+
+  function makeId() { return "e-" + Math.floor(Math.random() * 1e9) + "-" + Date.now().toString(36); }
+
+  function toast(msg) {
+    var stack = document.getElementById("toast-stack");
+    var el = document.createElement("div");
+    el.className = "toast";
+    el.textContent = msg;
+    stack.appendChild(el);
+    setTimeout(function () { el.remove(); }, 6000);
+  }
+
+  /* ---------- room: Firebase realtime sync (same room code as index.html) ---------- */
+  var ROOM_CODE_KEY = "rustoria-team-room-code";
+  var ROOM_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+  function generateRoomCode() {
+    var s = "";
+    for (var i = 0; i < 6; i++) s += ROOM_CODE_CHARS[Math.floor(Math.random() * ROOM_CODE_CHARS.length)];
+    return s;
+  }
+  function getSavedRoomCode() {
+    try { return localStorage.getItem(ROOM_CODE_KEY) || null; } catch (e) { return null; }
+  }
+  function saveRoomCode(code) {
+    try { localStorage.setItem(ROOM_CODE_KEY, code); } catch (e) { /* ignore */ }
+  }
+
+  var roomCode = null;
+  var entries = [];
+  var editingId = null;
+  var sortState = { key: "total", dir: "desc" };
+  var rankingDbRef = null;
+  var rankingListenerUnsub = null;
+  var teamsListenerUnsub = null;
+
+  function normalizeRemoteValue(val) {
+    if (Array.isArray(val)) return val.filter(Boolean);
+    if (val && typeof val === "object") return Object.keys(val).map(function (k) { return val[k]; });
+    return [];
+  }
+
+  function computeTotal(e) { return (e.wood || 0) + (e.stone || 0) + (e.metalOre || 0) + (e.sulfur || 0); }
+  function computeKD(e) { var d = e.deaths || 0; var k = e.kills || 0; return d > 0 ? k / d : k; }
+
+  function syncEntriesToFirebase() {
+    if (!rankingDbRef) return;
+    set(rankingDbRef, entries).catch(function () {
+      toast("⚠ クラウド同期に失敗した（このデバイスの画面には反映済み）");
+    });
+  }
+
+  function fillMemberDatalist(teams) {
+    var datalist = document.getElementById("member-names");
+    if (!datalist) return;
+    var names = [];
+    teams.forEach(function (t) {
+      (normalizeRemoteValue(t.members)).forEach(function (m) {
+        if (m && m.name && names.indexOf(m.name) === -1) names.push(m.name);
+      });
+    });
+    datalist.innerHTML = names.map(function (n) { return '<option value="' + escapeHtml(n) + '"></option>'; }).join("");
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function formatNum(n) { return Math.round(n || 0).toLocaleString("en-US"); }
+  function formatKD(n) { return (n || 0).toFixed(2); }
+  function formatUpdated(ts) {
+    if (!ts) return "--";
+    var d = new Date(ts);
+    return d.getMonth() + 1 + "/" + d.getDate() + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+  }
+
+  var SORT_ACCESSORS = {
+    name: function (e) { return (e.name || "").toLowerCase(); },
+    wood: function (e) { return e.wood || 0; },
+    stone: function (e) { return e.stone || 0; },
+    metalOre: function (e) { return e.metalOre || 0; },
+    sulfur: function (e) { return e.sulfur || 0; },
+    total: computeTotal,
+    kills: function (e) { return e.kills || 0; },
+    deaths: function (e) { return e.deaths || 0; },
+    kd: computeKD,
+    playtimeHours: function (e) { return e.playtimeHours || 0; }
+  };
+
+  function renderTable() {
+    var tbody = document.getElementById("ranking-tbody");
+    var emptyNote = document.getElementById("ranking-empty");
+    var countEl = document.getElementById("entry-count");
+    if (countEl) countEl.textContent = entries.length;
+
+    if (!entries.length) {
+      tbody.innerHTML = "";
+      if (emptyNote) emptyNote.hidden = false;
+      updateSortHeaderUI();
+      return;
+    }
+    if (emptyNote) emptyNote.hidden = true;
+
+    var accessor = SORT_ACCESSORS[sortState.key] || SORT_ACCESSORS.total;
+    var sorted = entries.slice().sort(function (a, b) {
+      var av = accessor(a), bv = accessor(b);
+      if (av < bv) return sortState.dir === "asc" ? -1 : 1;
+      if (av > bv) return sortState.dir === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    tbody.innerHTML = sorted.map(function (e, i) {
+      var rank = i + 1;
+      var rankClass = rank === 1 ? "rank-1" : rank === 2 ? "rank-2" : rank === 3 ? "rank-3" : "";
+      var rankLabel = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : rank;
+      return (
+        '<tr>' +
+        '<td class="rank-cell ' + rankClass + '">' + rankLabel + '</td>' +
+        '<td class="name-cell">' + escapeHtml(e.name) + '</td>' +
+        '<td>' + formatNum(e.wood) + '</td>' +
+        '<td>' + formatNum(e.stone) + '</td>' +
+        '<td>' + formatNum(e.metalOre) + '</td>' +
+        '<td>' + formatNum(e.sulfur) + '</td>' +
+        '<td class="total-cell">' + formatNum(computeTotal(e)) + '</td>' +
+        '<td>' + formatNum(e.kills) + '</td>' +
+        '<td>' + formatNum(e.deaths) + '</td>' +
+        '<td>' + formatKD(computeKD(e)) + '</td>' +
+        '<td>' + formatNum(e.playtimeHours) + 'h</td>' +
+        '<td class="updated-cell">' + formatUpdated(e.updatedAt) + '</td>' +
+        '<td><div class="row-actions">' +
+        '<button class="edit" data-id="' + e.id + '" title="編集">✏️</button>' +
+        '<button class="del" data-id="' + e.id + '" title="削除">🗑</button>' +
+        '</div></td>' +
+        '</tr>'
+      );
+    }).join("");
+
+    tbody.querySelectorAll(".edit").forEach(function (btn) {
+      btn.addEventListener("click", function () { startEdit(btn.getAttribute("data-id")); });
+    });
+    tbody.querySelectorAll(".del").forEach(function (btn) {
+      btn.addEventListener("click", function () { deleteEntry(btn.getAttribute("data-id")); });
+    });
+
+    updateSortHeaderUI();
+  }
+
+  function updateSortHeaderUI() {
+    document.querySelectorAll("#ranking-table thead th[data-sort]").forEach(function (th) {
+      var key = th.getAttribute("data-sort");
+      th.classList.toggle("sorted", key === sortState.key);
+      th.setAttribute("data-arrow", sortState.dir === "asc" ? "▲" : "▼");
+    });
+  }
+
+  document.querySelectorAll("#ranking-table thead th[data-sort]").forEach(function (th) {
+    var key = th.getAttribute("data-sort");
+    if (key === "rank") return;
+    th.addEventListener("click", function () {
+      if (sortState.key === key) {
+        sortState.dir = sortState.dir === "asc" ? "desc" : "asc";
+      } else {
+        sortState.key = key;
+        sortState.dir = key === "name" ? "asc" : "desc";
+      }
+      renderTable();
+    });
+  });
+
+  function readForm() {
+    return {
+      name: document.getElementById("f-name").value.trim(),
+      wood: Number(document.getElementById("f-wood").value) || 0,
+      stone: Number(document.getElementById("f-stone").value) || 0,
+      metalOre: Number(document.getElementById("f-metal").value) || 0,
+      sulfur: Number(document.getElementById("f-sulfur").value) || 0,
+      kills: Number(document.getElementById("f-kills").value) || 0,
+      deaths: Number(document.getElementById("f-deaths").value) || 0,
+      playtimeHours: Number(document.getElementById("f-playtime").value) || 0
+    };
+  }
+
+  function clearForm() {
+    ["f-name", "f-wood", "f-stone", "f-metal", "f-sulfur", "f-kills", "f-deaths", "f-playtime"].forEach(function (id) {
+      document.getElementById(id).value = "";
+    });
+  }
+
+  function startEdit(id) {
+    var e = entries.find(function (x) { return x.id === id; });
+    if (!e) return;
+    editingId = id;
+    document.getElementById("f-name").value = e.name;
+    document.getElementById("f-wood").value = e.wood || "";
+    document.getElementById("f-stone").value = e.stone || "";
+    document.getElementById("f-metal").value = e.metalOre || "";
+    document.getElementById("f-sulfur").value = e.sulfur || "";
+    document.getElementById("f-kills").value = e.kills || "";
+    document.getElementById("f-deaths").value = e.deaths || "";
+    document.getElementById("f-playtime").value = e.playtimeHours || "";
+    document.getElementById("f-submit-btn").textContent = "✓ 更新";
+    document.getElementById("f-cancel-btn").hidden = false;
+    document.getElementById("f-name").focus();
+  }
+
+  function cancelEdit() {
+    editingId = null;
+    clearForm();
+    document.getElementById("f-submit-btn").textContent = "＋ 追加";
+    document.getElementById("f-cancel-btn").hidden = true;
+  }
+
+  function deleteEntry(id) {
+    entries = entries.filter(function (x) { return x.id !== id; });
+    syncEntriesToFirebase();
+    renderTable();
+    if (editingId === id) cancelEdit();
+  }
+
+  document.getElementById("f-submit-btn").addEventListener("click", function () {
+    var form = readForm();
+    if (!form.name) {
+      toast("⚠ 名前を入力してほしい");
+      document.getElementById("f-name").focus();
+      return;
+    }
+    if (editingId) {
+      var existing = entries.find(function (x) { return x.id === editingId; });
+      if (existing) {
+        Object.assign(existing, form);
+        existing.updatedAt = Date.now();
+      }
+    } else {
+      var dup = entries.find(function (x) { return x.name.toLowerCase() === form.name.toLowerCase(); });
+      if (dup) {
+        Object.assign(dup, form);
+        dup.updatedAt = Date.now();
+        toast("同名の記録を上書き更新した");
+      } else {
+        form.id = makeId();
+        form.updatedAt = Date.now();
+        entries.push(form);
+      }
+    }
+    syncEntriesToFirebase();
+    renderTable();
+    cancelEdit();
+  });
+
+  document.getElementById("f-cancel-btn").addEventListener("click", cancelEdit);
+  document.getElementById("f-name").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); document.getElementById("f-submit-btn").click(); }
+  });
+
+  function connectToRoom(code, seedIfEmpty) {
+    roomCode = code;
+    saveRoomCode(code);
+    var displayEl = document.getElementById("room-code-display");
+    if (displayEl) displayEl.textContent = code;
+
+    if (rankingListenerUnsub) { rankingListenerUnsub(); rankingListenerUnsub = null; }
+    if (teamsListenerUnsub) { teamsListenerUnsub(); teamsListenerUnsub = null; }
+
+    rankingDbRef = ref(db, "rooms/" + code + "/farmRanking");
+    var firstSnapshot = true;
+    rankingListenerUnsub = onValue(rankingDbRef, function (snapshot) {
+      try {
+        var remote = normalizeRemoteValue(snapshot.val());
+        if (firstSnapshot) {
+          firstSnapshot = false;
+          if (seedIfEmpty && remote.length === 0 && entries.length > 0) {
+            syncEntriesToFirebase();
+            renderTable();
+            return;
+          }
+        }
+        entries = remote;
+        renderTable();
+      } catch (err) {
+        console.error("ranking onValue failed:", err);
+        toast("⚠ ランキングデータの読み込みで問題が発生した");
+      }
+    }, function () {
+      toast("⚠ クラウド接続に失敗した");
+    });
+
+    var teamsDbRef = ref(db, "rooms/" + code + "/teams");
+    teamsListenerUnsub = onValue(teamsDbRef, function (snapshot) {
+      try {
+        fillMemberDatalist(normalizeRemoteValue(snapshot.val()));
+      } catch (err) {
+        console.error("teams onValue failed:", err);
+      }
+    });
+
+    var backdrop = document.getElementById("room-modal-backdrop");
+    if (backdrop) backdrop.hidden = true;
+  }
+
+  document.getElementById("room-create-btn").addEventListener("click", function () {
+    connectToRoom(generateRoomCode(), true);
+  });
+  document.getElementById("room-join-btn").addEventListener("click", function () {
+    var input = document.getElementById("room-join-input");
+    var code = input.value.trim().toUpperCase();
+    if (!code) { input.focus(); return; }
+    connectToRoom(code, false);
+  });
+  document.getElementById("room-join-input").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); document.getElementById("room-join-btn").click(); }
+  });
+  document.getElementById("room-copy-btn").addEventListener("click", function () {
+    try {
+      navigator.clipboard.writeText(roomCode || "");
+      toast("📋 ルームコードをコピーした");
+    } catch (e) { /* clipboard unavailable */ }
+  });
+  document.getElementById("room-switch-btn").addEventListener("click", function () {
+    var input = document.getElementById("room-join-input");
+    if (input) input.value = "";
+    var backdrop = document.getElementById("room-modal-backdrop");
+    if (backdrop) backdrop.hidden = false;
+  });
+
+  renderTable();
+
+  var savedRoomCode = getSavedRoomCode();
+  if (savedRoomCode) {
+    connectToRoom(savedRoomCode, false);
+  } else {
+    var roomModalBackdrop = document.getElementById("room-modal-backdrop");
+    if (roomModalBackdrop) roomModalBackdrop.hidden = false;
+  }
+})();
+</script>
+</body>
+</html>
