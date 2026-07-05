@@ -439,6 +439,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     if (!datalist) return;
     var names = [];
     teams.forEach(function (t) {
+      if (t.type !== "friend") return;
       (normalizeRemoteValue(t.members)).forEach(function (m) {
         if (m && m.name && names.indexOf(m.name) === -1) names.push(m.name);
       });
@@ -617,16 +618,15 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
         existing.updatedAt = Date.now();
       }
     } else {
-      var dup = entries.find(function (x) { return x.name.toLowerCase() === form.name.toLowerCase(); });
-      if (dup) {
-        Object.assign(dup, form);
-        dup.updatedAt = Date.now();
-        toast("同名の記録を上書き更新した");
-      } else {
-        form.id = makeId();
-        form.updatedAt = Date.now();
-        entries.push(form);
+      // Rust does not enforce unique display names, so a name match alone never implies
+      // it's the same person -- always add as a new row. Only "編集" (by id) may overwrite.
+      var sameName = entries.filter(function (x) { return x.name.toLowerCase() === form.name.toLowerCase(); });
+      if (sameName.length) {
+        toast("⚠ 同じ名前が" + sameName.length + "件すでにある（別人の可能性があるため上書きせず新規追加した）");
       }
+      form.id = makeId();
+      form.updatedAt = Date.now();
+      entries.push(form);
     }
     syncEntriesToFirebase();
     renderTable();
