@@ -152,13 +152,21 @@
   .entry-form input::placeholder { color: var(--text-faint); }
   .entry-form input#f-name { flex: 1 1 160px; min-width: 120px; }
   .entry-form input#f-steamid { flex: 1 1 200px; min-width: 160px; font-family: var(--font-mono); font-size: 12px; }
-  .entry-form input[type="number"] { width: 100px; }
+  .entry-form input[type="number"] { width: 82px; }
   .entry-form button {
     background: var(--surface-raised); border: 1px solid var(--line); color: var(--text-muted);
     font-size: 13px; padding: 8px 14px; border-radius: 3px; cursor: pointer; white-space: nowrap;
   }
   .entry-form button:hover { color: var(--rust-bright); border-color: var(--rust); }
   .entry-form button#f-submit-btn { border-color: var(--rust); color: var(--rust-bright); }
+
+  .wipe-bar {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 13px; color: var(--text-muted);
+  }
+  .wipe-bar select {
+    background: var(--surface-raised); border: 1px solid var(--line); color: var(--text);
+    font-size: 13px; padding: 7px 10px; border-radius: 3px; font-family: var(--font-mono);
+  }
 
   .paste-bar { margin-bottom: 8px; }
   .paste-box {
@@ -279,11 +287,16 @@
       </div>
     </div>
 
+    <div class="wipe-bar">
+      <label for="wipe-select">シーズン（ワイプ）：</label>
+      <select id="wipe-select"><option value="">読み込み中…</option></select>
+    </div>
+
     <div class="paste-bar">
       <button class="btn-ghost" id="paste-toggle-btn" type="button">📋 rustoria.coの表示をコピペして自動入力</button>
     </div>
     <div class="paste-box" id="paste-box" hidden>
-      <p>rustoria.coでメンバーのページを開き、木・石・金属鉱石・硫黄の表示部分をドラッグしてコピー(Ctrl+C)し、下に貼り付けてほしい。数値だけ自動で読み取って上のフォームに入れる（キル・デス・プレイ時間はrustoria.co側に無いので対象外）。</p>
+      <p>rustoria.coでメンバーのページを開き、木・石・金属鉱石・硫黄・上金・皮・脂肪・骨の表示部分をドラッグしてコピー(Ctrl+C)し、下に貼り付けてほしい。数値だけ自動で読み取って上のフォームに入れる（キル・デス・プレイ時間はrustoria.co側に無いので対象外）。</p>
       <textarea id="paste-textarea" rows="4" placeholder="ここに貼り付け…"></textarea>
       <button class="btn-ghost" id="paste-parse-btn" type="button">🔍 解析してフォームに入力</button>
     </div>
@@ -296,6 +309,10 @@
       <input type="number" id="f-stone" placeholder="石" min="0" />
       <input type="number" id="f-metal" placeholder="金属鉱石" min="0" />
       <input type="number" id="f-sulfur" placeholder="硫黄鉱石" min="0" />
+      <input type="number" id="f-hqm" placeholder="上金" min="0" />
+      <input type="number" id="f-leather" placeholder="皮" min="0" />
+      <input type="number" id="f-fat" placeholder="脂肪" min="0" />
+      <input type="number" id="f-bone" placeholder="骨" min="0" />
       <button class="btn-ghost" id="f-resources-fetch-btn" type="button" title="rustoria.coから名前検索して自動取得(中継サーバー経由)">🌾 自動取得</button>
       <input type="number" id="f-kills" placeholder="キル" min="0" />
       <input type="number" id="f-deaths" placeholder="デス" min="0" />
@@ -315,6 +332,10 @@
             <th data-sort="stone">石</th>
             <th data-sort="metalOre">金属鉱石</th>
             <th data-sort="sulfur">硫黄鉱石</th>
+            <th data-sort="hqm">上金</th>
+            <th data-sort="leather">皮</th>
+            <th data-sort="fat">脂肪</th>
+            <th data-sort="bone">骨</th>
             <th data-sort="total">合計ファーム</th>
             <th data-sort="kills">キル</th>
             <th data-sort="deaths">デス</th>
@@ -340,7 +361,8 @@
   </section>
 
   <footer>
-    <strong>データソース：</strong> 木・石・金属鉱石・硫黄は<a href="https://rustoria.co/leaderboards" target="_blank" rel="noopener">rustoria.co/leaderboards</a>を見て手入力（コピペ解析ボタンあり）。プレイ時間は敵チーム監視でBattleMetrics IDが紐付いていれば「⏱ 自動取得」で取得できる。キル・デスは自動取得できるデータソースが見つからず手入力のみ（rustoria.co・BattleMetricsともにこのサーバーでは公開していない）。<br />
+    <strong>データソース：</strong> 木・石・金属鉱石・硫黄・上金・皮・脂肪・骨は<a href="https://rustoria.co/leaderboards" target="_blank" rel="noopener">rustoria.co/leaderboards</a>を見て手入力（コピペ解析・🌾自動取得あり）。プレイ時間は敵チーム監視でBattleMetrics IDが紐付いていれば「⏱ 自動取得」で取得できる。キル・デスは自動取得できるデータソースが見つからず手入力のみ（rustoria.co・BattleMetricsともにこのサーバーでは公開していない）。<br />
+    <strong>シーズン（ワイプ）：</strong> 上部のプルダウンでrustoria.co側の実際のワイプ履歴から選べる。選んだワイプの記録だけが表に表示され、追加した記録もそのワイプに紐付く（ワイプごとに資源量がリセットされるため、同じ人でもワイプが変われば新しい行として記録される）。<br />
     <strong>仕組み：</strong> 入力したデータは敵チーム監視ツールと同じルームにリアルタイム保存され、同じルームコードを知っている人全員と共有・編集できる。列見出しをクリックするとその項目で並び替えられる。合計ファーム・プレイ時間の横のアイコン（🌾📋⏱🧮）はその数値の取得元を表す。「🕘 更新履歴を見る」で誰が何をいつ追加・更新・削除したかを確認できる。削除ボタンは確認ダイアログを経ないと実行されない。
   </footer>
 </div>
@@ -486,6 +508,12 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
   var logDbRef = null;
   var logListenerUnsub = null;
 
+  // Season/wipe selector: entries are tagged with a concrete wipe date string (e.g. "7/2/2026",
+  // from rustoria.co's own /statistics/wipes list), not a "current" sentinel -- a sentinel would
+  // silently go stale and mislabel old entries once the next wipe happens.
+  var wipesList = [];
+  var selectedWipe = null;
+
   // Provenance tracking: which source last populated the resource fields / playtime field in
   // the form. Set to "manual" whenever the user types directly (see the "input" listeners below),
   // and overwritten to the specific source right after an auto-fetch/paste-parse succeeds.
@@ -529,7 +557,10 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     return [];
   }
 
-  function computeTotal(e) { return (e.wood || 0) + (e.stone || 0) + (e.metalOre || 0) + (e.sulfur || 0); }
+  function computeTotal(e) {
+    return (e.wood || 0) + (e.stone || 0) + (e.metalOre || 0) + (e.sulfur || 0) +
+      (e.hqm || 0) + (e.leather || 0) + (e.fat || 0) + (e.bone || 0);
+  }
   function computeKD(e) { var d = e.deaths || 0; var k = e.kills || 0; return d > 0 ? k / d : k; }
 
   // Steam IDs are unique per person (unlike in-game display names), so use them as the
@@ -668,6 +699,10 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     stone: function (e) { return e.stone || 0; },
     metalOre: function (e) { return e.metalOre || 0; },
     sulfur: function (e) { return e.sulfur || 0; },
+    hqm: function (e) { return e.hqm || 0; },
+    leather: function (e) { return e.leather || 0; },
+    fat: function (e) { return e.fat || 0; },
+    bone: function (e) { return e.bone || 0; },
     total: computeTotal,
     kills: function (e) { return e.kills || 0; },
     deaths: function (e) { return e.deaths || 0; },
@@ -675,13 +710,61 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     playtimeHours: function (e) { return e.playtimeHours || 0; }
   };
 
+  function populateWipeSelect(wipes) {
+    var sel = document.getElementById("wipe-select");
+    if (!sel) return;
+    sel.innerHTML = wipes.map(function (w, i) {
+      var label = i === 0 ? w + "（現在のワイプ）" : w;
+      return '<option value="' + escapeHtml(w) + '">' + escapeHtml(label) + '</option>';
+    }).join("");
+  }
+
+  function selectWipe(value) {
+    selectedWipe = value;
+    var sel = document.getElementById("wipe-select");
+    if (sel && sel.value !== value) sel.value = value;
+    renderTable();
+  }
+
+  function fetchWipesList() {
+    return fetch(RUSTORIA_PROXY_URL + "/wipes").then(function (res) {
+      if (!res.ok) throw new Error("wipes request failed: " + res.status);
+      return res.json();
+    }).then(function (wipes) {
+      if (!Array.isArray(wipes) || !wipes.length) throw new Error("empty wipes list");
+      wipesList = wipes;
+      populateWipeSelect(wipesList);
+      selectWipe(wipesList[0]);
+    }).catch(function (err) {
+      console.error("wipes fetch failed:", err);
+      // Fall back to a single synthetic option so the tool still works even if
+      // rustoria.co/the proxy is unreachable -- just without real wipe history.
+      wipesList = ["current"];
+      populateWipeSelect(wipesList);
+      selectWipe(wipesList[0]);
+      toast("⚠ ワイプ一覧の取得に失敗した（「current」のみで続行する）");
+    });
+  }
+
+  document.getElementById("wipe-select").addEventListener("change", function (e) {
+    selectWipe(e.target.value);
+  });
+
+  // Entries with no wipe recorded (from before this feature existed) are treated as
+  // unscoped and always shown, rather than silently hidden by a schema change.
+  function entriesForSelectedWipe() {
+    if (!selectedWipe) return entries.slice();
+    return entries.filter(function (e) { return !e.wipe || e.wipe === selectedWipe; });
+  }
+
   function renderTable() {
     var tbody = document.getElementById("ranking-tbody");
     var emptyNote = document.getElementById("ranking-empty");
     var countEl = document.getElementById("entry-count");
-    if (countEl) countEl.textContent = entries.length;
+    var visible = entriesForSelectedWipe();
+    if (countEl) countEl.textContent = visible.length;
 
-    if (!entries.length) {
+    if (!visible.length) {
       tbody.innerHTML = "";
       if (emptyNote) emptyNote.hidden = false;
       updateSortHeaderUI();
@@ -690,7 +773,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     if (emptyNote) emptyNote.hidden = true;
 
     var accessor = SORT_ACCESSORS[sortState.key] || SORT_ACCESSORS.total;
-    var sorted = entries.slice().sort(function (a, b) {
+    var sorted = visible.slice().sort(function (a, b) {
       var av = accessor(a), bv = accessor(b);
       if (av < bv) return sortState.dir === "asc" ? -1 : 1;
       if (av > bv) return sortState.dir === "asc" ? 1 : -1;
@@ -717,6 +800,10 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
         '<td>' + formatNum(e.stone) + '</td>' +
         '<td>' + formatNum(e.metalOre) + '</td>' +
         '<td>' + formatNum(e.sulfur) + '</td>' +
+        '<td>' + formatNum(e.hqm) + '</td>' +
+        '<td>' + formatNum(e.leather) + '</td>' +
+        '<td>' + formatNum(e.fat) + '</td>' +
+        '<td>' + formatNum(e.bone) + '</td>' +
         '<td class="total-cell" title="' + escapeHtml(resourceTitle) + '">' + formatNum(computeTotal(e)) + (resourceIcon ? ' <span class="source-icon">' + resourceIcon + '</span>' : '') + '</td>' +
         '<td>' + formatNum(e.kills) + '</td>' +
         '<td>' + formatNum(e.deaths) + '</td>' +
@@ -771,16 +858,23 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
       stone: Number(document.getElementById("f-stone").value) || 0,
       metalOre: Number(document.getElementById("f-metal").value) || 0,
       sulfur: Number(document.getElementById("f-sulfur").value) || 0,
+      hqm: Number(document.getElementById("f-hqm").value) || 0,
+      leather: Number(document.getElementById("f-leather").value) || 0,
+      fat: Number(document.getElementById("f-fat").value) || 0,
+      bone: Number(document.getElementById("f-bone").value) || 0,
       kills: Number(document.getElementById("f-kills").value) || 0,
       deaths: Number(document.getElementById("f-deaths").value) || 0,
       playtimeHours: Number(document.getElementById("f-playtime").value) || 0,
       resourceSource: lastResourceFillMethod,
-      playtimeSource: lastPlaytimeFillMethod
+      playtimeSource: lastPlaytimeFillMethod,
+      wipe: selectedWipe
     };
   }
 
+  var RESOURCE_FIELD_IDS = ["f-wood", "f-stone", "f-metal", "f-sulfur", "f-hqm", "f-leather", "f-fat", "f-bone"];
+
   function clearForm() {
-    ["f-name", "f-steamid", "f-wood", "f-stone", "f-metal", "f-sulfur", "f-kills", "f-deaths", "f-playtime"].forEach(function (id) {
+    ["f-name", "f-steamid"].concat(RESOURCE_FIELD_IDS, ["f-kills", "f-deaths", "f-playtime"]).forEach(function (id) {
       document.getElementById(id).value = "";
     });
     lastResourceFillMethod = "manual";
@@ -797,11 +891,16 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     document.getElementById("f-stone").value = e.stone || "";
     document.getElementById("f-metal").value = e.metalOre || "";
     document.getElementById("f-sulfur").value = e.sulfur || "";
+    document.getElementById("f-hqm").value = e.hqm || "";
+    document.getElementById("f-leather").value = e.leather || "";
+    document.getElementById("f-fat").value = e.fat || "";
+    document.getElementById("f-bone").value = e.bone || "";
     document.getElementById("f-kills").value = e.kills || "";
     document.getElementById("f-deaths").value = e.deaths || "";
     document.getElementById("f-playtime").value = e.playtimeHours || "";
     lastResourceFillMethod = e.resourceSource || "manual";
     lastPlaytimeFillMethod = e.playtimeSource || "manual";
+    if (e.wipe) selectWipe(e.wipe);
     document.getElementById("f-submit-btn").textContent = "✓ 更新";
     document.getElementById("f-cancel-btn").hidden = false;
     document.getElementById("f-name").focus();
@@ -837,6 +936,10 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
       document.getElementById("f-name").focus();
       return;
     }
+    if (!form.wipe) {
+      toast("⚠ ワイプ一覧の読み込み中。少し待ってから追加してほしい");
+      return;
+    }
     if (editingId) {
       var existing = entries.find(function (x) { return x.id === editingId; });
       if (existing) {
@@ -848,15 +951,18 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
       // Steam ID uniquely identifies a person, so a match there is trusted as "same person".
       // A name match alone is NOT trusted -- Rust doesn't enforce unique display names --
       // so it always adds a new row (with a warning) instead of silently overwriting someone else.
+      // Both checks are scoped to the selected wipe: resources reset each wipe, so the same
+      // real person is expected to get a fresh entry every wipe, not overwrite last wipe's.
+      var wipeScoped = entriesForSelectedWipe();
       var formKey = steamIdKey(form.steamId);
-      var bySteamId = formKey ? entries.find(function (x) { return steamIdKey(x.steamId) === formKey; }) : null;
+      var bySteamId = formKey ? wipeScoped.find(function (x) { return steamIdKey(x.steamId) === formKey; }) : null;
       if (bySteamId) {
         Object.assign(bySteamId, form);
         bySteamId.updatedAt = Date.now();
         toast("同じSteam IDの記録を更新した（" + bySteamId.name + "）");
         pushLog("update", bySteamId.name, describeSource(form) + "（Steam ID一致）");
       } else {
-        var sameName = entries.filter(function (x) { return x.name.toLowerCase() === form.name.toLowerCase(); });
+        var sameName = wipeScoped.filter(function (x) { return x.name.toLowerCase() === form.name.toLowerCase(); });
         if (sameName.length) {
           toast("⚠ 同じ名前が" + sameName.length + "件すでにある（別人の可能性があるため上書きせず新規追加した。Steam IDを入れておくと次から自動で判定できる）");
         }
@@ -871,7 +977,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     cancelEdit();
   });
 
-  ["f-wood", "f-stone", "f-metal", "f-sulfur"].forEach(function (id) {
+  RESOURCE_FIELD_IDS.forEach(function (id) {
     document.getElementById(id).addEventListener("input", function () { lastResourceFillMethod = "manual"; });
   });
   document.getElementById("f-playtime").addEventListener("input", function () { lastPlaytimeFillMethod = "manual"; });
@@ -884,8 +990,9 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
   // ---------- paste-to-autofill: parse text copied straight off rustoria.co's own page ----------
   // No network request involved (so no CORS issue) -- just reads whatever the user pasted.
   // Rustoria labels these "Wood Harvested" / "Stones Harvested" / "Metal Ore Harvested" /
-  // "Sulfur Ore Harvested" per their public statistics/mappings endpoint; kills/deaths/playtime
-  // aren't tracked there at all, so this intentionally only targets the 4 resources.
+  // "Sulfur Ore Harvested" / "HQ Metal Ore Harvested" / "Leather Harvested" /
+  // "Animal Fat Harvested" / "Bone Fragments Harvested" per their public statistics/mappings
+  // endpoint; kills/deaths/playtime aren't tracked there at all, so those stay manual-only.
   function parsePastedStats(text) {
     function findNum(labelRegex) {
       var m = text.match(labelRegex);
@@ -896,7 +1003,11 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
       wood: findNum(/Wood\s*Harvested[^\d]{0,20}([\d,]+)/i),
       stone: findNum(/Stones?\s*Harvested[^\d]{0,20}([\d,]+)/i),
       metalOre: findNum(/(?<!HQ\s)Metal\s*Ore\s*Harvested[^\d]{0,20}([\d,]+)/i),
-      sulfur: findNum(/Sulfur\s*Ore\s*Harvested[^\d]{0,20}([\d,]+)/i)
+      sulfur: findNum(/Sulfur\s*Ore\s*Harvested[^\d]{0,20}([\d,]+)/i),
+      hqm: findNum(/HQ\s*Metal\s*Ore\s*Harvested[^\d]{0,20}([\d,]+)/i),
+      leather: findNum(/Leather\s*Harvested[^\d]{0,20}([\d,]+)/i),
+      fat: findNum(/Animal\s*Fat\s*Harvested[^\d]{0,20}([\d,]+)/i),
+      bone: findNum(/Bone\s*Fragments\s*Harvested[^\d]{0,20}([\d,]+)/i)
     };
   }
 
@@ -917,6 +1028,10 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     if (parsed.stone != null) { document.getElementById("f-stone").value = parsed.stone; found.push("石"); }
     if (parsed.metalOre != null) { document.getElementById("f-metal").value = parsed.metalOre; found.push("金属鉱石"); }
     if (parsed.sulfur != null) { document.getElementById("f-sulfur").value = parsed.sulfur; found.push("硫黄鉱石"); }
+    if (parsed.hqm != null) { document.getElementById("f-hqm").value = parsed.hqm; found.push("上金"); }
+    if (parsed.leather != null) { document.getElementById("f-leather").value = parsed.leather; found.push("皮"); }
+    if (parsed.fat != null) { document.getElementById("f-fat").value = parsed.fat; found.push("脂肪"); }
+    if (parsed.bone != null) { document.getElementById("f-bone").value = parsed.bone; found.push("骨"); }
     if (found.length) {
       lastResourceFillMethod = "paste_parse";
       toast("✓ " + found.join("・") + " を読み取ってフォームに入力した（名前とSteam IDは自分で入れてほしい）");
@@ -998,7 +1113,12 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
   // so scanning to find someone outside the search match isn't practical). If a name isn't found
   // (typo, name changed, etc.), paste-parse or manual entry cover that case.
   function fetchResourcesFromRustoria(name) {
-    var url = RUSTORIA_PROXY_URL + "?from=0&sortBy=total&orderBy=desc&username=" + encodeURIComponent(name);
+    var url = RUSTORIA_PROXY_URL + "/resources?from=0&sortBy=total&orderBy=desc&username=" + encodeURIComponent(name);
+    // Omit the wipe param for the current wipe (matches rustoria.co's own frontend behavior);
+    // pass it explicitly for any historical wipe selected from the dropdown.
+    if (selectedWipe && wipesList.length && selectedWipe !== wipesList[0]) {
+      url += "&wipe=" + encodeURIComponent(selectedWipe);
+    }
     return fetch(url).then(function (res) {
       if (!res.ok) throw new Error("proxy request failed: " + res.status);
       return res.json();
@@ -1012,7 +1132,11 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
         wood: d.farming_resource_wood_harvested || 0,
         stone: d.farming_resource_stone_harvested || 0,
         metalOre: d.farming_resource_metal_harvested || 0,
-        sulfur: d.farming_resource_sulfur_harvested || 0
+        sulfur: d.farming_resource_sulfur_harvested || 0,
+        hqm: d.farming_resource_hqm_harvested || 0,
+        leather: d.farming_animal_leather_harvested || 0,
+        fat: d.farming_animal_fat_harvested || 0,
+        bone: d.farming_animal_bone_harvested || 0
       };
     });
   }
@@ -1048,6 +1172,10 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
       document.getElementById("f-stone").value = result.stone;
       document.getElementById("f-metal").value = result.metalOre;
       document.getElementById("f-sulfur").value = result.sulfur;
+      document.getElementById("f-hqm").value = result.hqm;
+      document.getElementById("f-leather").value = result.leather;
+      document.getElementById("f-fat").value = result.fat;
+      document.getElementById("f-bone").value = result.bone;
       lastResourceFillMethod = "rustoria_auto";
       toast("✓ rustoria.coから資源量を自動取得した");
     }).catch(function (err) {
@@ -1142,6 +1270,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
   });
 
   renderTable();
+  fetchWipesList();
 
   var savedRoomCode = getSavedRoomCode();
   if (savedRoomCode) {

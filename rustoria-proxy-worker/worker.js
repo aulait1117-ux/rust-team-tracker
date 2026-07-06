@@ -1,14 +1,18 @@
-// Read-only CORS proxy for a single Rustoria.co statistics endpoint.
+// Read-only CORS proxy for a small, fixed set of Rustoria.co statistics endpoints.
 // api.rustoria.co has no Access-Control-Allow-Origin header, so ranking.html
 // (served from GitHub Pages) can't call it directly from the browser. This
 // worker fetches on the server side (no CORS involved there) and re-serves
 // the response with CORS headers added, restricted to our own site's origin.
 //
-// The upstream path/server are hardcoded (not taken from the request) so this
-// can't be abused as an open relay to arbitrary URLs.
+// UPSTREAM_ROUTES is a fixed lookup table (our path -> exact upstream URL), not
+// built from request input, so this can't be abused as an open relay to
+// arbitrary URLs -- only these two exact upstream endpoints are ever reachable.
 
 const ALLOWED_ORIGIN = "https://aulait1117-ux.github.io";
-const UPSTREAM_BASE = "https://api.rustoria.co/statistics/leaderboards/vanilla_main_us/resources";
+const UPSTREAM_ROUTES = {
+  "/resources": "https://api.rustoria.co/statistics/leaderboards/vanilla_main_us/resources",
+  "/wipes": "https://api.rustoria.co/statistics/wipes/vanilla_main_us"
+};
 
 function corsHeaders() {
   return {
@@ -29,7 +33,14 @@ export default {
     }
 
     const incoming = new URL(request.url);
-    const target = new URL(UPSTREAM_BASE);
+    const upstreamBase = UPSTREAM_ROUTES[incoming.pathname];
+    if (!upstreamBase) {
+      return new Response(JSON.stringify({ error: "unknown route" }), {
+        status: 404,
+        headers: { ...corsHeaders(), "Content-Type": "application/json" }
+      });
+    }
+    const target = new URL(upstreamBase);
     target.search = incoming.search;
 
     let upstream;
