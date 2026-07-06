@@ -991,10 +991,19 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     });
   }
 
+  // Simple client-side cooldown: this hits rustoria.co (via the proxy) on every click, so a brief
+  // debounce keeps repeated/accidental clicks from looking like abusive polling on their end.
+  var RESOURCES_FETCH_COOLDOWN_MS = 3000;
+  var resourcesFetchCooldownUntil = 0;
+
   document.getElementById("f-resources-fetch-btn").addEventListener("click", function () {
     var name = document.getElementById("f-name").value.trim();
     if (!name) {
       toast("⚠ 先に名前を入力してほしい");
+      return;
+    }
+    if (Date.now() < resourcesFetchCooldownUntil) {
+      toast("⚠ 連続クリックを防ぐため少し待ってほしい（数秒後に再試行できる）");
       return;
     }
     var btn = document.getElementById("f-resources-fetch-btn");
@@ -1021,6 +1030,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     }).finally(function () {
       btn.disabled = false;
       btn.textContent = "🌾 自動取得";
+      resourcesFetchCooldownUntil = Date.now() + RESOURCES_FETCH_COOLDOWN_MS;
     });
   });
 
