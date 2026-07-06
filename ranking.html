@@ -200,6 +200,7 @@
   .rank-3 { color: var(--bronze); font-weight: 700; }
   .name-cell { color: var(--text); font-weight: 600; }
   .total-cell { color: var(--rust-bright); font-weight: 700; }
+  .source-icon { font-size: 11px; opacity: 0.75; }
   .updated-cell { color: var(--text-faint); font-size: 11.5px; font-family: var(--font-mono); }
   .row-actions { display: flex; gap: 4px; justify-content: flex-end; }
   .row-actions button {
@@ -211,6 +212,25 @@
 
   .empty-note { color: var(--text-faint); font-size: 12.5px; padding: 16px; text-align: center; }
   .empty-note[hidden] { display: none; }
+
+  .log-bar { margin-top: 10px; }
+  .log-panel {
+    margin-top: 8px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line);
+    border-radius: 4px; max-height: 260px; overflow-y: auto;
+  }
+  .log-panel[hidden] { display: none; }
+  .log-list { display: flex; flex-direction: column; gap: 6px; }
+  .log-row {
+    display: flex; gap: 10px; align-items: baseline; font-size: 12px; color: var(--text-muted);
+    border-bottom: 1px solid var(--line-soft); padding-bottom: 6px;
+  }
+  .log-row:last-child { border-bottom: none; padding-bottom: 0; }
+  .log-time { font-family: var(--font-mono); color: var(--text-faint); white-space: nowrap; flex: none; }
+  .log-action { flex: none; font-weight: 700; white-space: nowrap; }
+  .log-action.add { color: var(--moss); }
+  .log-action.update { color: var(--amber); }
+  .log-action.delete { color: var(--alert); }
+  .log-detail { color: var(--text-faint); }
 
   #toast-stack {
     position: fixed; right: 16px; bottom: 16px; z-index: 50;
@@ -308,11 +328,19 @@
       </table>
       <div class="empty-note" id="ranking-empty" hidden>まだ記録がない。上のフォームからチームメンバーのファーム量を追加してほしい。</div>
     </div>
+
+    <div class="log-bar">
+      <button class="btn-ghost" id="log-toggle-btn" type="button">🕘 更新履歴を見る</button>
+    </div>
+    <div class="log-panel" id="log-panel" hidden>
+      <div id="log-list" class="log-list"></div>
+      <div class="empty-note" id="log-empty" hidden>まだ履歴がない。</div>
+    </div>
   </section>
 
   <footer>
     <strong>データソース：</strong> 木・石・金属鉱石・硫黄は<a href="https://rustoria.co/leaderboards" target="_blank" rel="noopener">rustoria.co/leaderboards</a>を見て手入力（コピペ解析ボタンあり）。プレイ時間は敵チーム監視でBattleMetrics IDが紐付いていれば「⏱ 自動取得」で取得できる。キル・デスは自動取得できるデータソースが見つからず手入力のみ（rustoria.co・BattleMetricsともにこのサーバーでは公開していない）。<br />
-    <strong>仕組み：</strong> 入力したデータは敵チーム監視ツールと同じルームにリアルタイム保存され、同じルームコードを知っている人全員と共有・編集できる。列見出しをクリックするとその項目で並び替えられる。
+    <strong>仕組み：</strong> 入力したデータは敵チーム監視ツールと同じルームにリアルタイム保存され、同じルームコードを知っている人全員と共有・編集できる。列見出しをクリックするとその項目で並び替えられる。合計ファーム・プレイ時間の横のアイコン（🌾📋⏱🧮）はその数値の取得元を表す。「🕘 更新履歴を見る」で誰が何をいつ追加・更新・削除したかを確認できる。削除ボタンは確認ダイアログを経ないと実行されない。
   </footer>
 </div>
 
@@ -454,6 +482,45 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
   var rankingDbRef = null;
   var rankingListenerUnsub = null;
   var teamsListenerUnsub = null;
+  var logDbRef = null;
+  var logListenerUnsub = null;
+
+  // Provenance tracking: which source last populated the resource fields / playtime field in
+  // the form. Set to "manual" whenever the user types directly (see the "input" listeners below),
+  // and overwritten to the specific source right after an auto-fetch/paste-parse succeeds.
+  var lastResourceFillMethod = "manual";
+  var lastPlaytimeFillMethod = "manual";
+
+  var SOURCE_LABELS = {
+    rustoria_auto: "rustoria.co自動取得",
+    paste_parse: "コピペ解析",
+    manual: "手入力",
+    battlemetrics_auto: "BattleMetrics自動取得",
+    local_estimate: "ローカル推定"
+  };
+  var SOURCE_ICONS = {
+    rustoria_auto: "🌾",
+    paste_parse: "📋",
+    manual: "",
+    battlemetrics_auto: "⏱",
+    local_estimate: "🧮"
+  };
+
+  var LOG_MAX_ENTRIES = 200;
+
+  function pushLog(action, name, detail) {
+    if (!logDbRef) return;
+    var entry = { ts: Date.now(), action: action, name: name, detail: detail || "" };
+    var next = logEntries.concat([entry]);
+    if (next.length > LOG_MAX_ENTRIES) next = next.slice(next.length - LOG_MAX_ENTRIES);
+    logEntries = next;
+    set(logDbRef, logEntries).catch(function () {
+      toast("⚠ 履歴の保存に失敗した（画面上の操作自体は反映済み）");
+    });
+    renderLog();
+  }
+
+  var logEntries = [];
 
   function normalizeRemoteValue(val) {
     if (Array.isArray(val)) return val.filter(Boolean);
@@ -539,6 +606,36 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     return d.getMonth() + 1 + "/" + d.getDate() + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
   }
 
+  var LOG_ACTION_LABELS = { add: "追加", update: "更新", delete: "削除" };
+
+  function renderLog() {
+    var list = document.getElementById("log-list");
+    var emptyNote = document.getElementById("log-empty");
+    if (!list) return;
+    if (!logEntries.length) {
+      list.innerHTML = "";
+      if (emptyNote) emptyNote.hidden = false;
+      return;
+    }
+    if (emptyNote) emptyNote.hidden = true;
+    var sorted = logEntries.slice().sort(function (a, b) { return b.ts - a.ts; });
+    list.innerHTML = sorted.map(function (l) {
+      return (
+        '<div class="log-row">' +
+        '<span class="log-time">' + escapeHtml(formatUpdated(l.ts)) + '</span>' +
+        '<span class="log-action ' + escapeHtml(l.action) + '">' + escapeHtml(LOG_ACTION_LABELS[l.action] || l.action) + '</span>' +
+        '<span class="name-cell">' + escapeHtml(l.name) + '</span>' +
+        '<span class="log-detail">' + escapeHtml(l.detail || "") + '</span>' +
+        '</div>'
+      );
+    }).join("");
+  }
+
+  document.getElementById("log-toggle-btn").addEventListener("click", function () {
+    var panel = document.getElementById("log-panel");
+    panel.hidden = !panel.hidden;
+  });
+
   var SORT_ACCESSORS = {
     name: function (e) { return (e.name || "").toLowerCase(); },
     wood: function (e) { return e.wood || 0; },
@@ -582,6 +679,10 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
       var nameHtml = escapeHtml(e.name) + (profileUrl
         ? ' <a class="steamid-link" href="' + escapeHtml(profileUrl) + '" target="_blank" rel="noopener" title="Steamプロフィールを開く">🔗</a>'
         : '');
+      var resourceIcon = SOURCE_ICONS[e.resourceSource] || "";
+      var resourceTitle = "取得元: " + (SOURCE_LABELS[e.resourceSource] || "手入力");
+      var playtimeIcon = SOURCE_ICONS[e.playtimeSource] || "";
+      var playtimeTitle = "取得元: " + (SOURCE_LABELS[e.playtimeSource] || "手入力");
       return (
         '<tr>' +
         '<td class="rank-cell ' + rankClass + '">' + rankLabel + '</td>' +
@@ -590,11 +691,11 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
         '<td>' + formatNum(e.stone) + '</td>' +
         '<td>' + formatNum(e.metalOre) + '</td>' +
         '<td>' + formatNum(e.sulfur) + '</td>' +
-        '<td class="total-cell">' + formatNum(computeTotal(e)) + '</td>' +
+        '<td class="total-cell" title="' + escapeHtml(resourceTitle) + '">' + formatNum(computeTotal(e)) + (resourceIcon ? ' <span class="source-icon">' + resourceIcon + '</span>' : '') + '</td>' +
         '<td>' + formatNum(e.kills) + '</td>' +
         '<td>' + formatNum(e.deaths) + '</td>' +
         '<td>' + formatKD(computeKD(e)) + '</td>' +
-        '<td>' + formatNum(e.playtimeHours) + 'h</td>' +
+        '<td title="' + escapeHtml(playtimeTitle) + '">' + formatNum(e.playtimeHours) + 'h' + (playtimeIcon ? ' <span class="source-icon">' + playtimeIcon + '</span>' : '') + '</td>' +
         '<td class="updated-cell">' + formatUpdated(e.updatedAt) + '</td>' +
         '<td><div class="row-actions">' +
         '<button class="edit" data-id="' + e.id + '" title="編集">✏️</button>' +
@@ -646,7 +747,9 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
       sulfur: Number(document.getElementById("f-sulfur").value) || 0,
       kills: Number(document.getElementById("f-kills").value) || 0,
       deaths: Number(document.getElementById("f-deaths").value) || 0,
-      playtimeHours: Number(document.getElementById("f-playtime").value) || 0
+      playtimeHours: Number(document.getElementById("f-playtime").value) || 0,
+      resourceSource: lastResourceFillMethod,
+      playtimeSource: lastPlaytimeFillMethod
     };
   }
 
@@ -654,6 +757,8 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     ["f-name", "f-steamid", "f-wood", "f-stone", "f-metal", "f-sulfur", "f-kills", "f-deaths", "f-playtime"].forEach(function (id) {
       document.getElementById(id).value = "";
     });
+    lastResourceFillMethod = "manual";
+    lastPlaytimeFillMethod = "manual";
   }
 
   function startEdit(id) {
@@ -669,6 +774,8 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     document.getElementById("f-kills").value = e.kills || "";
     document.getElementById("f-deaths").value = e.deaths || "";
     document.getElementById("f-playtime").value = e.playtimeHours || "";
+    lastResourceFillMethod = e.resourceSource || "manual";
+    lastPlaytimeFillMethod = e.playtimeSource || "manual";
     document.getElementById("f-submit-btn").textContent = "✓ 更新";
     document.getElementById("f-cancel-btn").hidden = false;
     document.getElementById("f-name").focus();
@@ -682,10 +789,19 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
   }
 
   function deleteEntry(id) {
+    var e = entries.find(function (x) { return x.id === id; });
+    if (!e) return;
+    if (!window.confirm("削除する？\n\n" + e.name + " の記録を削除します。この操作は取り消せません。")) return;
     entries = entries.filter(function (x) { return x.id !== id; });
     syncEntriesToFirebase();
     renderTable();
+    pushLog("delete", e.name, "");
     if (editingId === id) cancelEdit();
+  }
+
+  function describeSource(form) {
+    return "資源:" + (SOURCE_LABELS[form.resourceSource] || form.resourceSource) +
+      " / プレイ時間:" + (SOURCE_LABELS[form.playtimeSource] || form.playtimeSource);
   }
 
   document.getElementById("f-submit-btn").addEventListener("click", function () {
@@ -700,6 +816,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
       if (existing) {
         Object.assign(existing, form);
         existing.updatedAt = Date.now();
+        pushLog("update", existing.name, describeSource(form));
       }
     } else {
       // Steam ID uniquely identifies a person, so a match there is trusted as "same person".
@@ -711,6 +828,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
         Object.assign(bySteamId, form);
         bySteamId.updatedAt = Date.now();
         toast("同じSteam IDの記録を更新した（" + bySteamId.name + "）");
+        pushLog("update", bySteamId.name, describeSource(form) + "（Steam ID一致）");
       } else {
         var sameName = entries.filter(function (x) { return x.name.toLowerCase() === form.name.toLowerCase(); });
         if (sameName.length) {
@@ -719,12 +837,18 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
         form.id = makeId();
         form.updatedAt = Date.now();
         entries.push(form);
+        pushLog("add", form.name, describeSource(form));
       }
     }
     syncEntriesToFirebase();
     renderTable();
     cancelEdit();
   });
+
+  ["f-wood", "f-stone", "f-metal", "f-sulfur"].forEach(function (id) {
+    document.getElementById(id).addEventListener("input", function () { lastResourceFillMethod = "manual"; });
+  });
+  document.getElementById("f-playtime").addEventListener("input", function () { lastPlaytimeFillMethod = "manual"; });
 
   document.getElementById("f-cancel-btn").addEventListener("click", cancelEdit);
   document.getElementById("f-name").addEventListener("keydown", function (e) {
@@ -768,6 +892,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     if (parsed.metalOre != null) { document.getElementById("f-metal").value = parsed.metalOre; found.push("金属鉱石"); }
     if (parsed.sulfur != null) { document.getElementById("f-sulfur").value = parsed.sulfur; found.push("硫黄鉱石"); }
     if (found.length) {
+      lastResourceFillMethod = "paste_parse";
       toast("✓ " + found.join("・") + " を読み取ってフォームに入力した（名前とSteam IDは自分で入れてほしい）");
     } else {
       toast("⚠ 数値を読み取れなかった。手入力してほしい");
@@ -819,6 +944,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
       if (seconds != null) {
         var hours = Math.round((seconds / 3600) * 10) / 10;
         document.getElementById("f-playtime").value = hours;
+        lastPlaytimeFillMethod = "battlemetrics_auto";
         toast("✓ プレイ時間を自動取得した（" + hours + "時間、BattleMetrics）");
         return;
       }
@@ -830,6 +956,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
         return;
       }
       document.getElementById("f-playtime").value = localHours;
+      lastPlaytimeFillMethod = "local_estimate";
       toast("✓ プレイ時間を推定取得した（" + localHours + "時間、敵チーム監視のローカル記録から計算。±45秒の誤差あり）");
     }).catch(function (err) {
       console.error("playtime fetch failed:", err);
@@ -886,6 +1013,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
       document.getElementById("f-stone").value = result.stone;
       document.getElementById("f-metal").value = result.metalOre;
       document.getElementById("f-sulfur").value = result.sulfur;
+      lastResourceFillMethod = "rustoria_auto";
       toast("✓ rustoria.coから資源量を自動取得した");
     }).catch(function (err) {
       console.error("resources fetch failed:", err);
@@ -904,6 +1032,17 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
 
     if (rankingListenerUnsub) { rankingListenerUnsub(); rankingListenerUnsub = null; }
     if (teamsListenerUnsub) { teamsListenerUnsub(); teamsListenerUnsub = null; }
+    if (logListenerUnsub) { logListenerUnsub(); logListenerUnsub = null; }
+
+    logDbRef = ref(db, "rooms/" + code + "/farmRankingLog");
+    logListenerUnsub = onValue(logDbRef, function (snapshot) {
+      try {
+        logEntries = normalizeRemoteValue(snapshot.val());
+        renderLog();
+      } catch (err) {
+        console.error("log onValue failed:", err);
+      }
+    });
 
     rankingDbRef = ref(db, "rooms/" + code + "/farmRanking");
     var firstSnapshot = true;
