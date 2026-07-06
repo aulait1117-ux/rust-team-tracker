@@ -465,6 +465,7 @@
     <div class="room-bar-actions">
       <button class="btn-ghost" id="room-copy-btn" type="button">📋 コピー</button>
       <button class="btn-ghost" id="room-switch-btn" type="button">🔄 別のルームに切り替える</button>
+      <button class="btn-ghost" id="export-backup-btn" type="button">📥 バックアップをダウンロード</button>
     </div>
   </div>
 
@@ -903,6 +904,29 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     if (input) input.value = "";
     var backdrop = document.getElementById("room-modal-backdrop");
     if (backdrop) backdrop.hidden = false;
+  });
+
+  // Lightweight, on-demand backup: no server of our own here either (Firebase only), so a
+  // downloadable snapshot survives even if the Firebase project itself were lost or wiped.
+  document.getElementById("export-backup-btn").addEventListener("click", function () {
+    var payload = {
+      exportedAt: new Date().toISOString(),
+      roomCode: roomCode,
+      teams: teamsState.teams
+    };
+    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    var datePart = payload.exportedAt.slice(0, 10);
+    a.href = url;
+    a.download = "rust-team-watch-backup-" + (roomCode || "unknown") + "-" + datePart + ".json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // Revoking immediately can race with the browser actually starting to save the blob,
+    // canceling the download -- delay it so the download has time to begin.
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+    toast("📥 バックアップをダウンロードした（" + teamsState.teams.length + "チーム）");
   });
 
   var TEAMS_PREFS_KEY = "rustoria-us-main-teams-prefs-v1";

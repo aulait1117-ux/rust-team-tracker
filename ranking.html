@@ -213,7 +213,7 @@
   .empty-note { color: var(--text-faint); font-size: 12.5px; padding: 16px; text-align: center; }
   .empty-note[hidden] { display: none; }
 
-  .log-bar { margin-top: 10px; }
+  .log-bar { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
   .log-panel {
     margin-top: 8px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line);
     border-radius: 4px; max-height: 260px; overflow-y: auto;
@@ -331,6 +331,7 @@
 
     <div class="log-bar">
       <button class="btn-ghost" id="log-toggle-btn" type="button">🕘 更新履歴を見る</button>
+      <button class="btn-ghost" id="export-backup-btn" type="button">📥 バックアップをダウンロード</button>
     </div>
     <div class="log-panel" id="log-panel" hidden>
       <div id="log-list" class="log-list"></div>
@@ -634,6 +635,31 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
   document.getElementById("log-toggle-btn").addEventListener("click", function () {
     var panel = document.getElementById("log-panel");
     panel.hidden = !panel.hidden;
+  });
+
+  // Lightweight, on-demand backup: this tool has no server of its own (Firebase + a read-only
+  // proxy), so a downloadable snapshot is the simplest resilient option -- no extra
+  // infrastructure, and it survives even if the Firebase project itself were lost or wiped.
+  document.getElementById("export-backup-btn").addEventListener("click", function () {
+    var payload = {
+      exportedAt: new Date().toISOString(),
+      roomCode: roomCode,
+      farmRanking: entries,
+      farmRankingLog: logEntries
+    };
+    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    var datePart = payload.exportedAt.slice(0, 10);
+    a.href = url;
+    a.download = "rust-team-ranking-backup-" + (roomCode || "unknown") + "-" + datePart + ".json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // Revoking immediately can race with the browser actually starting to save the blob,
+    // canceling the download -- delay it so the download has time to begin.
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+    toast("📥 バックアップをダウンロードした（" + entries.length + "件）");
   });
 
   var SORT_ACCESSORS = {
