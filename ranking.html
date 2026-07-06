@@ -288,6 +288,8 @@
     </div>
 
     <div class="wipe-bar">
+      <label for="server-select">サーバー：</label>
+      <select id="server-select"><option value="">読み込み中…</option></select>
       <label for="wipe-select">シーズン（ワイプ）：</label>
       <select id="wipe-select"><option value="">読み込み中…</option></select>
     </div>
@@ -296,7 +298,7 @@
       <button class="btn-ghost" id="paste-toggle-btn" type="button">📋 rustoria.coの表示をコピペして自動入力</button>
     </div>
     <div class="paste-box" id="paste-box" hidden>
-      <p>rustoria.coでメンバーのページを開き、木・石・金属鉱石・硫黄・上金・皮・脂肪・骨の表示部分をドラッグしてコピー(Ctrl+C)し、下に貼り付けてほしい。数値だけ自動で読み取って上のフォームに入れる（キル・デス・プレイ時間はrustoria.co側に無いので対象外）。</p>
+      <p>rustoria.coでメンバーのページを開き、木・石・金属鉱石・硫黄・上金・皮・脂肪・骨の表示部分をドラッグしてコピー(Ctrl+C)し、下に貼り付けてほしい。数値だけ自動で読み取って上のフォームに入れる（資源のみ対応。キル・デスも自動で取得したい場合は🌾自動取得ボタンを使ってほしい。プレイ時間はrustoria.co側にデータが無いので対象外）。</p>
       <textarea id="paste-textarea" rows="4" placeholder="ここに貼り付け…"></textarea>
       <button class="btn-ghost" id="paste-parse-btn" type="button">🔍 解析してフォームに入力</button>
     </div>
@@ -313,7 +315,7 @@
       <input type="number" id="f-leather" placeholder="皮" min="0" />
       <input type="number" id="f-fat" placeholder="脂肪" min="0" />
       <input type="number" id="f-bone" placeholder="骨" min="0" />
-      <button class="btn-ghost" id="f-resources-fetch-btn" type="button" title="rustoria.coから名前検索して自動取得(中継サーバー経由)">🌾 自動取得</button>
+      <button class="btn-ghost" id="f-resources-fetch-btn" type="button" title="rustoria.coから名前検索して資源8種・キル・デスを自動取得(中継サーバー経由)">🌾 自動取得</button>
       <input type="number" id="f-kills" placeholder="キル" min="0" />
       <input type="number" id="f-deaths" placeholder="デス" min="0" />
       <input type="number" id="f-playtime" placeholder="プレイ時間(h)" min="0" step="0.1" />
@@ -361,8 +363,9 @@
   </section>
 
   <footer>
-    <strong>データソース：</strong> 木・石・金属鉱石・硫黄・上金・皮・脂肪・骨は<a href="https://rustoria.co/leaderboards" target="_blank" rel="noopener">rustoria.co/leaderboards</a>を見て手入力（コピペ解析・🌾自動取得あり）。プレイ時間は敵チーム監視でBattleMetrics IDが紐付いていれば「⏱ 自動取得」で取得できる。キル・デスは自動取得できるデータソースが見つからず手入力のみ（rustoria.co・BattleMetricsともにこのサーバーでは公開していない）。<br />
-    <strong>シーズン（ワイプ）：</strong> 上部のプルダウンでrustoria.co側の実際のワイプ履歴から選べる。選んだワイプの記録だけが表に表示され、追加した記録もそのワイプに紐付く（ワイプごとに資源量がリセットされるため、同じ人でもワイプが変われば新しい行として記録される）。<br />
+    <strong>データソース：</strong> 木・石・金属鉱石・硫黄・上金・皮・脂肪・骨、およびキル・デスは<a href="https://rustoria.co/leaderboards" target="_blank" rel="noopener">rustoria.co/leaderboards</a>を見て手入力（コピペ解析は資源のみ対応、🌾自動取得は資源8種＋キル・デスの両方に対応）。プレイ時間は敵チーム監視でBattleMetrics IDが紐付いていれば「⏱ 自動取得」で取得できる。<br />
+    <strong>サーバー：</strong> 上部のプルダウンでrustoria.coが運営する約26サーバーから選べる（既定はVanilla Main US）。選んだサーバーの資源・PvP・ワイプ一覧を取得する。選択は端末に記憶される。<br />
+    <strong>シーズン（ワイプ）：</strong> サーバーごとの実際のワイプ履歴から選べる。選んだワイプの記録だけが表に表示され、追加した記録もそのサーバー・ワイプに紐付く（ワイプごとに資源量がリセットされるため、同じ人でもワイプが変われば新しい行として記録される）。<br />
     <strong>仕組み：</strong> 入力したデータは敵チーム監視ツールと同じルームにリアルタイム保存され、同じルームコードを知っている人全員と共有・編集できる。列見出しをクリックするとその項目で並び替えられる。合計ファーム・プレイ時間の横のアイコン（🌾📋⏱🧮）はその数値の取得元を表す。「🕘 更新履歴を見る」で誰が何をいつ追加・更新・削除したかを確認できる。削除ボタンは確認ダイアログを経ないと実行されない。
   </footer>
 </div>
@@ -508,9 +511,17 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
   var logDbRef = null;
   var logListenerUnsub = null;
 
+  // Server selector: which Rustoria.co server (of the ~26 it hosts) to read from. Persisted
+  // locally so it doesn't reset to the default every page load once someone picks a different one.
+  var SERVER_STORAGE_KEY = "rustoria-ranking-server";
+  var serversList = [];
+  var selectedServer = null;
+
   // Season/wipe selector: entries are tagged with a concrete wipe date string (e.g. "7/2/2026",
   // from rustoria.co's own /statistics/wipes list), not a "current" sentinel -- a sentinel would
-  // silently go stale and mislabel old entries once the next wipe happens.
+  // silently go stale and mislabel old entries once the next wipe happens. Wipe dates aren't
+  // globally unique across servers (many servers wipe on the same schedule), so entries are
+  // scoped by BOTH server and wipe together.
   var wipesList = [];
   var selectedWipe = null;
 
@@ -710,6 +721,49 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     playtimeHours: function (e) { return e.playtimeHours || 0; }
   };
 
+  function populateServerSelect(servers) {
+    var sel = document.getElementById("server-select");
+    if (!sel) return;
+    sel.innerHTML = servers.map(function (s) {
+      return '<option value="' + escapeHtml(s.id) + '">' + escapeHtml(s.name) + '</option>';
+    }).join("");
+  }
+
+  function selectServer(value) {
+    selectedServer = value;
+    try { localStorage.setItem(SERVER_STORAGE_KEY, value); } catch (e) { /* ignore */ }
+    var sel = document.getElementById("server-select");
+    if (sel && sel.value !== value) sel.value = value;
+    fetchWipesList();
+  }
+
+  function fetchServersList() {
+    return fetch(RUSTORIA_PROXY_URL + "/servers").then(function (res) {
+      if (!res.ok) throw new Error("servers request failed: " + res.status);
+      return res.json();
+    }).then(function (servers) {
+      if (!Array.isArray(servers) || !servers.length) throw new Error("empty servers list");
+      serversList = servers;
+      populateServerSelect(serversList);
+      var saved = null;
+      try { saved = localStorage.getItem(SERVER_STORAGE_KEY); } catch (e) { /* ignore */ }
+      var initial = (saved && servers.some(function (s) { return s.id === saved; })) ? saved : "vanilla_main_us";
+      selectServer(initial);
+    }).catch(function (err) {
+      console.error("servers fetch failed:", err);
+      // Fall back to just the one server this tool was originally built for, so it still
+      // works even if rustoria.co/the proxy is unreachable.
+      serversList = [{ id: "vanilla_main_us", name: "Vanilla Main US" }];
+      populateServerSelect(serversList);
+      selectServer("vanilla_main_us");
+      toast("⚠ サーバー一覧の取得に失敗した（Vanilla Main USのみで続行する）");
+    });
+  }
+
+  document.getElementById("server-select").addEventListener("change", function (e) {
+    selectServer(e.target.value);
+  });
+
   function populateWipeSelect(wipes) {
     var sel = document.getElementById("wipe-select");
     if (!sel) return;
@@ -727,7 +781,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
   }
 
   function fetchWipesList() {
-    return fetch(RUSTORIA_PROXY_URL + "/wipes").then(function (res) {
+    return fetch(RUSTORIA_PROXY_URL + "/wipes?server=" + encodeURIComponent(selectedServer)).then(function (res) {
       if (!res.ok) throw new Error("wipes request failed: " + res.status);
       return res.json();
     }).then(function (wipes) {
@@ -750,11 +804,16 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     selectWipe(e.target.value);
   });
 
-  // Entries with no wipe recorded (from before this feature existed) are treated as
-  // unscoped and always shown, rather than silently hidden by a schema change.
+  // Entries with no wipe/server recorded (from before this feature existed) are treated as
+  // unscoped and always shown, rather than silently hidden by a schema change. Wipe dates
+  // aren't unique across servers (many wipe on the same schedule), so both must match.
   function entriesForSelectedWipe() {
     if (!selectedWipe) return entries.slice();
-    return entries.filter(function (e) { return !e.wipe || e.wipe === selectedWipe; });
+    return entries.filter(function (e) {
+      var wipeMatches = !e.wipe || e.wipe === selectedWipe;
+      var serverMatches = !e.server || e.server === selectedServer;
+      return wipeMatches && serverMatches;
+    });
   }
 
   function renderTable() {
@@ -867,7 +926,8 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
       playtimeHours: Number(document.getElementById("f-playtime").value) || 0,
       resourceSource: lastResourceFillMethod,
       playtimeSource: lastPlaytimeFillMethod,
-      wipe: selectedWipe
+      wipe: selectedWipe,
+      server: selectedServer
     };
   }
 
@@ -1108,17 +1168,23 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     });
   });
 
-  // ---------- resources auto-fetch: rustoria.co's own "resources" statistic bundle, via proxy ----------
+  // ---------- resources/pvp auto-fetch: rustoria.co's own statistic bundles, via proxy ----------
   // Exact-name search only (no full-listing fallback -- rustoria.co paginates 10 rows at a time,
   // so scanning to find someone outside the search match isn't practical). If a name isn't found
   // (typo, name changed, etc.), paste-parse or manual entry cover that case.
-  function fetchResourcesFromRustoria(name) {
-    var url = RUSTORIA_PROXY_URL + "/resources?from=0&sortBy=total&orderBy=desc&username=" + encodeURIComponent(name);
+  function rustoriaQueryParams(name) {
+    var qs = "from=0&sortBy=total&orderBy=desc&username=" + encodeURIComponent(name) +
+      "&server=" + encodeURIComponent(selectedServer);
     // Omit the wipe param for the current wipe (matches rustoria.co's own frontend behavior);
     // pass it explicitly for any historical wipe selected from the dropdown.
     if (selectedWipe && wipesList.length && selectedWipe !== wipesList[0]) {
-      url += "&wipe=" + encodeURIComponent(selectedWipe);
+      qs += "&wipe=" + encodeURIComponent(selectedWipe);
     }
+    return qs;
+  }
+
+  function fetchBundle(route, name) {
+    var url = RUSTORIA_PROXY_URL + route + "?" + rustoriaQueryParams(name);
     return fetch(url).then(function (res) {
       if (!res.ok) throw new Error("proxy request failed: " + res.status);
       return res.json();
@@ -1126,7 +1192,14 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
       var rows = json.leaderboard || [];
       if (rows.length === 0) return { found: false };
       if (rows.length > 1) return { found: false, multiple: true, count: rows.length };
-      var d = rows[0].data || {};
+      return { found: true, data: rows[0].data || {} };
+    });
+  }
+
+  function fetchResourcesFromRustoria(name) {
+    return fetchBundle("/resources", name).then(function (result) {
+      if (!result.found) return result;
+      var d = result.data;
       return {
         found: true,
         wood: d.farming_resource_wood_harvested || 0,
@@ -1137,6 +1210,18 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
         leather: d.farming_animal_leather_harvested || 0,
         fat: d.farming_animal_fat_harvested || 0,
         bone: d.farming_animal_bone_harvested || 0
+      };
+    });
+  }
+
+  function fetchPvpFromRustoria(name) {
+    return fetchBundle("/pvp", name).then(function (result) {
+      if (!result.found) return result;
+      var d = result.data;
+      return {
+        found: true,
+        kills: d.pvp_player_kills_total || 0,
+        deaths: d.pvp_player_deaths_total || 0
       };
     });
   }
@@ -1159,27 +1244,47 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     var btn = document.getElementById("f-resources-fetch-btn");
     btn.disabled = true;
     btn.textContent = "検索中…";
-    fetchResourcesFromRustoria(name).then(function (result) {
-      if (result.multiple) {
-        toast("⚠ 同名候補が" + result.count + "件見つかった。rustoria.co側で確認して手入力してほしい");
-        return;
+    Promise.all([fetchResourcesFromRustoria(name), fetchPvpFromRustoria(name)]).then(function (results) {
+      var res = results[0], pvp = results[1];
+      var filled = [];
+      var issues = [];
+
+      if (res.found) {
+        document.getElementById("f-wood").value = res.wood;
+        document.getElementById("f-stone").value = res.stone;
+        document.getElementById("f-metal").value = res.metalOre;
+        document.getElementById("f-sulfur").value = res.sulfur;
+        document.getElementById("f-hqm").value = res.hqm;
+        document.getElementById("f-leather").value = res.leather;
+        document.getElementById("f-fat").value = res.fat;
+        document.getElementById("f-bone").value = res.bone;
+        lastResourceFillMethod = "rustoria_auto";
+        filled.push("資源8種");
+      } else if (res.multiple) {
+        issues.push("資源: 同名候補" + res.count + "件");
+      } else {
+        issues.push("資源: 見つからなかった");
       }
-      if (!result.found) {
-        toast("⚠ rustoria.coで見つからなかった（名前が違うかも）。コピペ解析か手入力を使ってほしい");
-        return;
+
+      if (pvp.found) {
+        document.getElementById("f-kills").value = pvp.kills;
+        document.getElementById("f-deaths").value = pvp.deaths;
+        filled.push("キル/デス");
+      } else if (pvp.multiple) {
+        issues.push("キル/デス: 同名候補" + pvp.count + "件");
+      } else {
+        issues.push("キル/デス: 見つからなかった");
       }
-      document.getElementById("f-wood").value = result.wood;
-      document.getElementById("f-stone").value = result.stone;
-      document.getElementById("f-metal").value = result.metalOre;
-      document.getElementById("f-sulfur").value = result.sulfur;
-      document.getElementById("f-hqm").value = result.hqm;
-      document.getElementById("f-leather").value = result.leather;
-      document.getElementById("f-fat").value = result.fat;
-      document.getElementById("f-bone").value = result.bone;
-      lastResourceFillMethod = "rustoria_auto";
-      toast("✓ rustoria.coから資源量を自動取得した");
+
+      if (filled.length) {
+        var msg = "✓ " + filled.join("・") + "を自動取得した";
+        if (issues.length) msg += "（" + issues.join("、") + "）";
+        toast(msg);
+      } else {
+        toast("⚠ rustoria.coで見つからなかった（" + issues.join("、") + "）。コピペ解析か手入力を使ってほしい");
+      }
     }).catch(function (err) {
-      console.error("resources fetch failed:", err);
+      console.error("resources/pvp fetch failed:", err);
       toast("⚠ rustoria.coへの問い合わせに失敗した");
     }).finally(function () {
       btn.disabled = false;
@@ -1270,7 +1375,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
   });
 
   renderTable();
-  fetchWipesList();
+  fetchServersList();
 
   var savedRoomCode = getSavedRoomCode();
   if (savedRoomCode) {

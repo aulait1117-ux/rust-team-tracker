@@ -351,6 +351,12 @@
     border: 1px solid var(--moss); border-radius: 3px; padding: 1px 5px;
   }
   .suggest-empty { padding: 8px 10px; font-size: 12px; color: var(--text-faint); }
+  .server-suggest-box {
+    position: static; margin: 4px 0 0; max-height: 260px;
+  }
+  .suggest-item .suggest-region {
+    flex: none; font-family: var(--font-mono); font-size: 10px; color: var(--text-faint);
+  }
 
   /* ---------- OCR: screenshot -> name ---------- */
   .ocr-section { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line-soft); }
@@ -451,10 +457,11 @@
 <div class="wrap" id="app-content">
   <header class="page-head">
     <div class="page-head-title">
-      <span class="eyebrow">Rustoria.co · US Main · Vanilla 1x</span>
+      <span class="eyebrow" id="server-eyebrow">Rustoria.co · US Main</span>
       <h1>敵チーム監視</h1>
     </div>
     <div class="hero-actions">
+      <button class="btn-ghost" id="server-switch-btn" type="button">🔄 サーバーを変更</button>
       <a class="btn-ghost" href="ranking.html">📊 ファームランキングへ</a>
       <button class="btn-ghost" id="help-btn" type="button">❓ 使い方</button>
     </div>
@@ -537,6 +544,25 @@
     <div class="room-modal-row">
       <input type="text" id="room-join-input" placeholder="ルームコードを入力（例：AB12CD）" maxlength="8" />
       <button class="btn-ghost" id="room-join-btn" type="button">参加する</button>
+    </div>
+  </div>
+</div>
+
+<div class="room-modal-backdrop" id="server-modal-backdrop" hidden>
+  <div class="room-modal">
+    <h2>監視サーバーを変更</h2>
+    <p>
+      BattleMetrics上のRustサーバーを名前で検索して選べる。既定は「Rustoria.co」で検索している
+      （Rustoria.coは約26サーバー運営しているので、地域・種別で絞り込みたい場合は例えば
+      「Rustoria.co - EU」のように入力してほしい）。Rustoria以外の任意のRustサーバーも検索できる。
+    </p>
+    <div class="room-modal-row">
+      <input type="text" id="server-search-input" placeholder="サーバー名で検索…" value="Rustoria.co" />
+      <button class="btn-ghost" id="server-search-btn" type="button">検索</button>
+    </div>
+    <div class="suggest-box server-suggest-box" id="server-suggest-box"></div>
+    <div class="room-modal-row">
+      <button class="btn-ghost" id="server-modal-close-btn" type="button">閉じる</button>
     </div>
   </div>
 </div>
@@ -700,8 +726,22 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
   var firebaseApp = initializeApp(firebaseConfig);
   var db = getDatabase(firebaseApp);
 
+  // Monitored BattleMetrics server: defaults to Rustoria.co US Main, but can be switched to
+  // any Rust server on BattleMetrics via the server-search modal (persisted locally per browser).
+  var BM_SERVER_STORAGE_KEY = "rustoria-tracker-bm-server";
   var BM_SERVER_ID = "6324892";
-  var BM_PLAYERS_API = "https://api.battlemetrics.com/players?filter%5Bservers%5D=" + BM_SERVER_ID + "&filter%5Bonline%5D=true&page%5Bsize%5D=100";
+  var BM_SERVER_NAME = "Rustoria.co · US Main";
+  try {
+    var savedBmServer = JSON.parse(localStorage.getItem(BM_SERVER_STORAGE_KEY) || "null");
+    if (savedBmServer && savedBmServer.id && savedBmServer.name) {
+      BM_SERVER_ID = savedBmServer.id;
+      BM_SERVER_NAME = savedBmServer.name;
+    }
+  } catch (e) { /* ignore malformed saved value */ }
+
+  function bmPlayersApiUrl() {
+    return "https://api.battlemetrics.com/players?filter%5Bservers%5D=" + BM_SERVER_ID + "&filter%5Bonline%5D=true&page%5Bsize%5D=100";
+  }
   var TEAMS_STORAGE_KEY = "rustoria-us-main-teams-v1";
 
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
@@ -2116,6 +2156,87 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
       });
   }
 
+  /* ---------- server switch: search BattleMetrics' own server directory ---------- */
+  function searchServers(query) {
+    var url = "https://api.battlemetrics.com/servers?filter%5Bsearch%5D=" + encodeURIComponent(query) +
+      "&filter%5Bgame%5D=rust&page%5Bsize%5D=20";
+    return fetch(url, { cache: "no-store" })
+      .then(function (res) { if (!res.ok) throw new Error("bad status " + res.status); return res.json(); })
+      .then(function (data) {
+        return (data.data || [])
+          .filter(function (s) { return s && s.attributes && s.attributes.name; })
+          .map(function (s) {
+            var a = s.attributes;
+            return { id: s.id, name: a.name, players: a.players, maxPlayers: a.maxPlayers, status: a.status };
+          });
+      });
+  }
+
+  function updateServerEyebrow() {
+    var el = document.getElementById("server-eyebrow");
+    if (el) el.textContent = BM_SERVER_NAME;
+  }
+
+  function selectBmServer(id, name) {
+    BM_SERVER_ID = id;
+    BM_SERVER_NAME = name;
+    try { localStorage.setItem(BM_SERVER_STORAGE_KEY, JSON.stringify({ id: id, name: name })); } catch (e) { /* ignore */ }
+    updateServerEyebrow();
+    document.getElementById("server-modal-backdrop").hidden = true;
+    toast("🔄 監視サーバーを「" + name + "」に変更した");
+    lastKnownOnlineNamesLower = [];
+    refreshTeamStatuses();
+  }
+
+  function renderServerSuggestions(servers) {
+    var box = document.getElementById("server-suggest-box");
+    if (!servers.length) {
+      box.innerHTML = '<div class="suggest-empty">見つからなかった。別のキーワードで検索してほしい</div>';
+      return;
+    }
+    box.innerHTML = "";
+    servers.forEach(function (s) {
+      var item = document.createElement("div");
+      item.className = "suggest-item";
+      var nameEl = document.createElement("span");
+      nameEl.className = "suggest-name";
+      nameEl.textContent = s.name;
+      var infoEl = document.createElement("span");
+      infoEl.className = "suggest-region";
+      infoEl.textContent = (s.status === "online" ? (s.players + "/" + s.maxPlayers) : "オフライン");
+      item.appendChild(nameEl);
+      item.appendChild(infoEl);
+      item.addEventListener("click", function () { selectBmServer(s.id, s.name); });
+      box.appendChild(item);
+    });
+  }
+
+  function runServerSearch() {
+    var query = document.getElementById("server-search-input").value.trim();
+    if (!query) return;
+    var box = document.getElementById("server-suggest-box");
+    box.innerHTML = '<div class="suggest-empty">検索中…</div>';
+    searchServers(query).then(renderServerSuggestions).catch(function (err) {
+      console.error("server search failed:", err);
+      box.innerHTML = '<div class="suggest-empty">検索に失敗した</div>';
+    });
+  }
+
+  document.getElementById("server-switch-btn").addEventListener("click", function () {
+    document.getElementById("server-modal-backdrop").hidden = false;
+    document.getElementById("server-suggest-box").innerHTML = "";
+    runServerSearch();
+  });
+  document.getElementById("server-search-btn").addEventListener("click", runServerSearch);
+  document.getElementById("server-search-input").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); runServerSearch(); }
+  });
+  document.getElementById("server-modal-close-btn").addEventListener("click", function () {
+    document.getElementById("server-modal-backdrop").hidden = true;
+  });
+
+  updateServerEyebrow();
+
   /* ---------- session history: login trend tracking ---------- */
   var SESSION_MAX_AGE_MS = 60 * 24 * 60 * 60 * 1000; // 60 days
   var SESSION_MAX_COUNT = 200;
@@ -2136,7 +2257,7 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
       scheduleNextTeamsRefresh();
       return;
     }
-    fetchOnlinePlayerPage(BM_PLAYERS_API, [], 1, 8)
+    fetchOnlinePlayerPage(bmPlayersApiUrl(), [], 1, 8)
       .then(function (entries) {
         var lowerNames = entries.map(function (e) { return e.name.trim().toLowerCase(); });
         lastKnownOnlineNamesLower = lowerNames;
