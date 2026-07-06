@@ -472,6 +472,7 @@
     <div class="room-bar-actions">
       <button class="btn-ghost" id="room-copy-btn" type="button">📋 コピー</button>
       <button class="btn-ghost" id="room-switch-btn" type="button">🔄 別のルームに切り替える</button>
+      <button class="btn-ghost" id="room-password-btn" type="button">🔑 パスワード変更</button>
       <button class="btn-ghost" id="export-backup-btn" type="button">📥 バックアップをダウンロード</button>
     </div>
   </div>
@@ -537,6 +538,9 @@
       チーム・メンバーのリストをリアルタイムで共有するための「ルーム」を作成するか、
       友達から教えてもらったルームコードで参加できる。コードを知っている人だけが同じデータを見られる。
     </p>
+    <div class="room-modal-row">
+      <input type="text" id="room-create-password-input" placeholder="このルーム専用のパスワードを決める" autocomplete="off" />
+    </div>
     <div class="room-modal-row">
       <button class="btn-ghost" id="room-create-btn" type="button">🆕 新しいルームを作る</button>
     </div>
@@ -648,10 +652,10 @@
   </div>
 </div>
 
-<div class="lock-gate-backdrop" id="lock-gate-backdrop">
+<div class="lock-gate-backdrop" id="lock-gate-backdrop" hidden>
   <div class="lock-gate">
-    <h2>🔒 ロック中</h2>
-    <p>パスワードを入力してください。</p>
+    <h2 id="lock-gate-title">🔒 ロック中</h2>
+    <p id="lock-gate-desc">パスワードを入力してください。</p>
     <div class="lock-gate-row">
       <input type="password" id="lock-gate-input" placeholder="パスワード" autocomplete="off" />
       <button class="btn-ghost" id="lock-gate-submit-btn" type="button">解除</button>
@@ -664,54 +668,15 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
-import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-database.js";
+import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-database.js";
 
 (function () {
   "use strict";
 
-  /* ---------- lock gate: simple deterrent, not real security ---------- */
-  (function wireLockGate() {
-    var LOCK_UNLOCKED_KEY = "rustoria-tracker-unlocked";
-    var LOCK_PASSWORD = "0611";
-
-    var backdrop = document.getElementById("lock-gate-backdrop");
-    var appContent = document.getElementById("app-content");
-    var input = document.getElementById("lock-gate-input");
-    var submitBtn = document.getElementById("lock-gate-submit-btn");
-    var errorEl = document.getElementById("lock-gate-error");
-
-    function unlock() {
-      try { localStorage.setItem(LOCK_UNLOCKED_KEY, "1"); } catch (e) { /* ignore */ }
-      if (backdrop) backdrop.hidden = true;
-      if (appContent) appContent.classList.add("unlocked");
-    }
-
-    var alreadyUnlocked = false;
-    try { alreadyUnlocked = localStorage.getItem(LOCK_UNLOCKED_KEY) === "1"; } catch (e) { alreadyUnlocked = false; }
-
-    if (alreadyUnlocked) {
-      unlock();
-      return;
-    }
-
-    function attemptUnlock() {
-      if (!input) return;
-      if (input.value === LOCK_PASSWORD) {
-        unlock();
-      } else {
-        input.value = "";
-        if (errorEl) errorEl.hidden = false;
-        input.focus();
-      }
-    }
-
-    if (submitBtn) submitBtn.addEventListener("click", attemptUnlock);
-    if (input) {
-      input.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); attemptUnlock(); } });
-      input.addEventListener("input", function () { if (errorEl) errorEl.hidden = true; });
-      input.focus();
-    }
-  })();
+  // ---------- lock gate: simple deterrent, not real security ----------
+  // Per-room password (see wireRoomPasswordGate() below, after Firebase init) rather than one
+  // password shared by every customer -- so a leak only affects the one room it leaked from,
+  // and the president doesn't need to rotate every customer's access if one leaks.
 
   var firebaseConfig = {
     apiKey: "AIzaSyA22qQTD-1v5QBNzd7TuVcf_l8hU5lWPvg",
@@ -811,6 +776,74 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
   }
   function saveRoomCode(code) {
     try { localStorage.setItem(ROOM_CODE_KEY, code); } catch (e) { /* ignore */ }
+  }
+
+  /* ---------- per-room password gate ---------- */
+  var ROOM_UNLOCKED_KEY_PREFIX = "rustoria-tracker-unlocked-room-";
+  var LEGACY_UNLOCKED_KEY = "rustoria-tracker-unlocked"; // pre-per-room single shared password
+  var LEGACY_DEFAULT_PASSWORD = "0611"; // fallback for rooms created before this feature existed
+
+  function isRoomUnlocked(code) {
+    try {
+      if (localStorage.getItem(ROOM_UNLOCKED_KEY_PREFIX + code) === "1") return true;
+      // Migration: the old global flag covered every room on this browser. Honor it once for
+      // whichever room is currently active so existing users aren't suddenly re-prompted.
+      if (localStorage.getItem(LEGACY_UNLOCKED_KEY) === "1") return true;
+    } catch (e) { /* ignore */ }
+    return false;
+  }
+  function markRoomUnlocked(code) {
+    try { localStorage.setItem(ROOM_UNLOCKED_KEY_PREFIX + code, "1"); } catch (e) { /* ignore */ }
+  }
+
+  function fetchRoomPassword(code) {
+    return get(ref(db, "rooms/" + code + "/password")).then(function (snapshot) {
+      return snapshot.exists() ? snapshot.val() : null;
+    });
+  }
+
+  function showPasswordGate(code, requiredPassword, onSuccess) {
+    var backdrop = document.getElementById("lock-gate-backdrop");
+    var title = document.getElementById("lock-gate-title");
+    var desc = document.getElementById("lock-gate-desc");
+    var input = document.getElementById("lock-gate-input");
+    var submitBtn = document.getElementById("lock-gate-submit-btn");
+    var errorEl = document.getElementById("lock-gate-error");
+
+    if (title) title.textContent = "🔒 ルーム「" + code + "」";
+    if (desc) desc.textContent = "このルーム専用のパスワードを入力してください。";
+    if (input) input.value = "";
+    if (errorEl) errorEl.hidden = true;
+    if (backdrop) backdrop.hidden = false;
+    if (input) input.focus();
+
+    function attempt() {
+      if (!input) return;
+      if (input.value === requiredPassword) {
+        if (backdrop) backdrop.hidden = true;
+        cleanup();
+        onSuccess();
+      } else {
+        input.value = "";
+        if (errorEl) errorEl.hidden = false;
+        input.focus();
+      }
+    }
+    function onKeydown(e) { if (e.key === "Enter") { e.preventDefault(); attempt(); } }
+    function onInput() { if (errorEl) errorEl.hidden = true; }
+    function cleanup() {
+      if (submitBtn) submitBtn.removeEventListener("click", attempt);
+      if (input) {
+        input.removeEventListener("keydown", onKeydown);
+        input.removeEventListener("input", onInput);
+      }
+    }
+
+    if (submitBtn) submitBtn.addEventListener("click", attempt);
+    if (input) {
+      input.addEventListener("keydown", onKeydown);
+      input.addEventListener("input", onInput);
+    }
   }
 
   var roomCode = null;
@@ -924,14 +957,40 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
     if (backdrop) backdrop.hidden = true;
   }
 
+  function unlockAppAndConnect(code, seedIfEmpty) {
+    markRoomUnlocked(code);
+    var appContent = document.getElementById("app-content");
+    if (appContent) appContent.classList.add("unlocked");
+    connectToRoom(code, seedIfEmpty);
+  }
+
   document.getElementById("room-create-btn").addEventListener("click", function () {
-    connectToRoom(generateRoomCode(), true);
+    var pwInput = document.getElementById("room-create-password-input");
+    var pw = pwInput.value.trim();
+    if (!pw) {
+      toast("⚠ このルーム専用のパスワードを決めてほしい");
+      pwInput.focus();
+      return;
+    }
+    var code = generateRoomCode();
+    set(ref(db, "rooms/" + code + "/password"), pw).then(function () {
+      document.getElementById("room-modal-backdrop").hidden = true;
+      unlockAppAndConnect(code, true);
+    }).catch(function () {
+      toast("⚠ ルーム作成に失敗した");
+    });
   });
   document.getElementById("room-join-btn").addEventListener("click", function () {
     var input = document.getElementById("room-join-input");
     var code = input.value.trim().toUpperCase();
     if (!code) { input.focus(); return; }
-    connectToRoom(code, false);
+    fetchRoomPassword(code).then(function (pw) {
+      var required = pw || LEGACY_DEFAULT_PASSWORD;
+      document.getElementById("room-modal-backdrop").hidden = true;
+      showPasswordGate(code, required, function () { unlockAppAndConnect(code, false); });
+    }).catch(function () {
+      toast("⚠ ルーム情報の確認に失敗した");
+    });
   });
   document.getElementById("room-join-input").addEventListener("keydown", function (e) {
     if (e.key === "Enter") { e.preventDefault(); document.getElementById("room-join-btn").click(); }
@@ -942,8 +1001,22 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
   document.getElementById("room-switch-btn").addEventListener("click", function () {
     var input = document.getElementById("room-join-input");
     if (input) input.value = "";
+    var pwInput = document.getElementById("room-create-password-input");
+    if (pwInput) pwInput.value = "";
     var backdrop = document.getElementById("room-modal-backdrop");
     if (backdrop) backdrop.hidden = false;
+  });
+  document.getElementById("room-password-btn").addEventListener("click", function () {
+    if (!roomCode) return;
+    var next = window.prompt("「" + roomCode + "」の新しいパスワードを入力してください：");
+    if (next == null) return; // cancelled
+    next = next.trim();
+    if (!next) { toast("⚠ 空のパスワードには変更できない"); return; }
+    set(ref(db, "rooms/" + roomCode + "/password"), next).then(function () {
+      toast("🔑 このルームのパスワードを変更した");
+    }).catch(function () {
+      toast("⚠ パスワードの変更に失敗した");
+    });
   });
 
   // Lightweight, on-demand backup: no server of our own here either (Firebase only), so a
@@ -2471,7 +2544,16 @@ import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebase
 
   var savedRoomCode = getSavedRoomCode();
   if (savedRoomCode) {
-    connectToRoom(savedRoomCode, false);
+    if (isRoomUnlocked(savedRoomCode)) {
+      unlockAppAndConnect(savedRoomCode, false);
+    } else {
+      fetchRoomPassword(savedRoomCode).then(function (pw) {
+        var required = pw || LEGACY_DEFAULT_PASSWORD;
+        showPasswordGate(savedRoomCode, required, function () { unlockAppAndConnect(savedRoomCode, false); });
+      }).catch(function () {
+        toast("⚠ ルーム情報の確認に失敗した");
+      });
+    }
   } else {
     var roomModalBackdrop = document.getElementById("room-modal-backdrop");
     if (roomModalBackdrop) roomModalBackdrop.hidden = false;
