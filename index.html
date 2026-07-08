@@ -4,28 +4,37 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>敵チーム監視 - Rustチーム管理ツール</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Shippori+Mincho:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --ink: #101315;
-    --surface: #1a1e21;
-    --surface-raised: #21262a;
-    --line: #33393d;
-    --line-soft: #262b2e;
-    --text: #eae6df;
-    --text-muted: #9ba0a4;
-    --text-faint: #676c70;
-    --rust: #c8622f;
-    --rust-bright: #e2793f;
-    --moss: #6ea15a;
-    --amber: #d9a441;
-    --alert: #c94f3f;
-    --tier-high: #d1573f;
-    --tier-mid: #d9a441;
-    --tier-low: #6f8f8a;
-    --tier-hot: #b6893a;
+    /* 企業道OS カフェ・エディトリアル ダーク（os-theme.css 準拠）にリスキン 2026-07-09。
+       旧「ラスト橙×グレー」から、地はコーヒーブラウン／主役はセージ緑へ。
+       変数名は据え置き（下流のCSSを壊さないため）、値だけ企業道OSトークンに差し替える。 */
+    --ink: #16140f;            /* bg0 ページの地 */
+    --surface: #201c15;        /* glass カード面 */
+    --surface-raised: #26221a; /* glass2 一段持ち上げた面 */
+    --line: #2f2a20;           /* 温かみのある細線 */
+    --line-soft: #241f18;
+    --text: #f0eadc;           /* ink 本文 */
+    --text-muted: #9c937f;     /* muted */
+    --text-faint: #726b59;     /* dim */
+    --rust: #8fb0a0;           /* accent（セージ）＝旧ラスト橙の置き換え。主役アクセント */
+    --rust-bright: #a9c6b8;    /* accent 明るめ（リンク・ホバー） */
+    --moss: #8fb96e;           /* good */
+    --amber: #d6ab57;          /* gold */
+    --alert: #e0705a;          /* bad */
+    --tier-high: #e0705a;
+    --tier-mid: #d6ab57;
+    --tier-low: #8fb0a0;
+    --tier-hot: #dcb257;
+    --accent: #8fb0a0;
+    --accent-dim: rgba(143,176,160,.16);
 
-    --font-display: "Bahnschrift SemiBold", "Segoe UI Semibold", "Arial Narrow", sans-serif;
-    --font-body: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", sans-serif;
+    --font-display: "Shippori Mincho", "Yu Mincho", "Hiragino Mincho ProN", serif;
+    --font-serif: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+    --font-body: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, system-ui, sans-serif;
     --font-mono: "Cascadia Mono", "Consolas", "SF Mono", ui-monospace, Menlo, monospace;
   }
   * { box-sizing: border-box; }
@@ -35,13 +44,16 @@
     color: var(--text);
     font-family: var(--font-body);
     font-size: 15px;
-    line-height: 1.5;
+    line-height: 1.6;
+    letter-spacing: .01em;
+    -webkit-font-smoothing: antialiased;
   }
+  /* 企業道OSと同じ背景：やわらかな光（セージ／金）＋和紙のノイズ */
   body {
     background-image:
-      radial-gradient(ellipse 1000px 560px at 12% -8%, rgba(200, 98, 47, 0.09), transparent 58%),
-      radial-gradient(ellipse 800px 460px at 100% 0%, rgba(110, 161, 90, 0.05), transparent 55%),
-      repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px);
+      radial-gradient(1050px 620px at 92% -8%, rgba(143,176,160,.07), transparent 60%),
+      radial-gradient(860px 540px at 5% 3%, rgba(214,171,87,.05), transparent 62%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
   }
   a { color: var(--rust-bright); }
   button { font-family: inherit; }
@@ -81,12 +93,12 @@
   .page-head { padding: 26px 0 4px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
   .page-head .eyebrow {
     display: block; margin-bottom: 4px;
-    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.13em;
-    text-transform: uppercase; color: var(--rust-bright);
+    font-family: var(--font-serif); font-style: italic; font-size: 15px; letter-spacing: 0.1em;
+    text-transform: none; color: var(--accent);
   }
   .page-head h1 {
-    margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 22px;
-    letter-spacing: 0.02em; text-transform: uppercase; text-wrap: balance;
+    margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 26px;
+    letter-spacing: 0.05em; text-transform: none; text-wrap: balance;
   }
 
   /* ---------- shared bits (reused by team watch) ---------- */
@@ -451,9 +463,192 @@
     color: var(--text-faint); font-size: 12px; line-height: 1.7;
   }
   footer strong { color: var(--text-muted); }
+
+  /* ===== 起動ゲート演出（企業道OS＝生業と共通設計。紋章のみ→自動/クリックで題字を筆で描く→光が弾けて開く）2026-07-09 ===== */
+  #kg-gate{ position:fixed; inset:0; z-index:9999; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px; cursor:pointer;
+    background:radial-gradient(1200px 820px at 50% 42%, #201b13, #14120d 72%);
+    transition:opacity .75s cubic-bezier(.22,.61,.36,1), visibility .75s; }
+  #kg-gate.hide{ opacity:0; visibility:hidden; pointer-events:none; transform:scale(1.02); }
+  #kg-gate .g-emblem{ position:relative; display:flex; align-items:center; justify-content:center; }
+  #kg-gate .g-seal{ width:84px; height:84px; border-radius:50%; border:2px solid var(--text); display:flex; align-items:center; justify-content:center;
+    font-family:var(--font-display); font-weight:600; font-size:38px; color:var(--text); position:relative; opacity:0; transform:scale(.85);
+    animation:kgSealIn 1.4s cubic-bezier(.22,.61,.36,1) .25s forwards, kgSealGlow 3.6s ease-in-out 1.3s infinite; }
+  #kg-gate .g-seal::before{ content:""; position:absolute; inset:7px; border-radius:50%; border:1px solid rgba(240,234,220,.28); }
+  #kg-gate .g-seal::after{ content:""; position:absolute; inset:-12px; border-radius:50%; border:1px solid rgba(143,176,160,.4); opacity:0; animation:kgRing 1.7s ease .3s forwards; }
+  #kg-gate .g-orbit{ position:absolute; width:144px; height:144px; border-radius:50%;
+    background:conic-gradient(from 0deg, transparent, rgba(143,176,160,.55), transparent 32%);
+    -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+            mask:radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+    opacity:0; animation:kgOrbitIn 1.3s ease .4s forwards, kgSpin 5.4s linear .4s infinite; }
+  #kg-gate .g-charge{ position:absolute; left:50%; top:50%; width:220px; height:220px; margin:-110px 0 0 -110px; border-radius:50%; pointer-events:none; opacity:0; transform:scale(.6);
+    background:radial-gradient(circle, rgba(143,176,160,.5), rgba(143,176,160,0) 68%); }
+  #kg-gate .g-burst{ position:absolute; left:50%; top:50%; width:14px; height:14px; margin:-7px 0 0 -7px; border-radius:50%; pointer-events:none; opacity:0; transform:scale(0);
+    border:2px solid rgba(143,176,160,.8); box-shadow:0 0 48px 13px rgba(143,176,160,.42); }
+  #kg-gate .g-title{ position:relative; font-family:var(--font-display); font-weight:600; font-size:min(15vw,72px); letter-spacing:.22em; text-indent:.22em; color:var(--text);
+    line-height:1; white-space:nowrap; clip-path:inset(0 100% 0 0); transition:filter .9s ease; }
+  #kg-gate .g-line{ width:0; height:1px; max-width:300px; background:linear-gradient(90deg,transparent,var(--accent),transparent); }
+  #kg-gate .g-sub{ font-family:var(--font-serif); font-style:italic; font-size:16px; letter-spacing:.12em; color:var(--accent); opacity:0; }
+  #kg-gate .g-hint{ font-family:var(--font-serif); font-style:italic; font-size:13px; letter-spacing:.3em; color:var(--text-muted); opacity:0; margin-top:6px;
+    animation:kgHintPulse 2.8s ease-in-out 1.8s infinite; }
+  #kg-gate .g-eyebrow{ font-family:var(--font-display); font-size:15px; font-weight:600;
+    letter-spacing:.5em; text-indent:.5em; color:var(--accent); opacity:0; animation:kgUp 1.1s ease .5s forwards; }
+  #kg-gate .g-ara{ font-family:var(--font-serif); font-weight:500; font-size:20px; line-height:1; letter-spacing:.03em; color:var(--text-muted); opacity:0; margin-top:-4px; }
+  #kg-gate .g-ara i{ font-style:italic; color:var(--accent); text-shadow:0 0 12px rgba(143,176,160,.55); }
+  #kg-gate.charging .g-ara{ animation:kgUp 1.0s ease 1.9s forwards; }
+  @media (prefers-reduced-motion:no-preference){
+    #kg-gate .g-ara i{ animation:kgAraDot 3.6s ease-in-out 2.9s infinite; }
+    @keyframes kgAraDot{ 0%,100%{ text-shadow:0 0 6px rgba(143,176,160,.35) } 50%{ text-shadow:0 0 16px rgba(143,176,160,.85) } }
+  }
+  @keyframes kgSealIn{ to{opacity:1; transform:scale(1)} }
+  @keyframes kgSealGlow{ 0%,100%{ box-shadow:0 0 26px 2px rgba(143,176,160,.06) } 50%{ box-shadow:0 0 48px 6px rgba(143,176,160,.24) } }
+  @keyframes kgRing{ 0%{opacity:0; transform:scale(.9)} 40%{opacity:.7} 100%{opacity:0; transform:scale(1.28)} }
+  @keyframes kgOrbitIn{ to{opacity:.85} }
+  @keyframes kgSpin{ to{ transform:rotate(360deg) } }
+  @keyframes kgClip{ to{clip-path:inset(0 0 0 0)} }
+  @keyframes kgUp{ from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:none} }
+  @keyframes kgLine{ to{width:300px} }
+  @keyframes kgHintPulse{ 0%,100%{opacity:.32; transform:translateY(0)} 50%{opacity:.7; transform:translateY(-1px)} }
+  #kg-gate.charging{ cursor:default; }
+  #kg-gate.charging .g-charge{ animation:kgChargeUp 1.2s ease-in forwards; }
+  #kg-gate.charging .g-orbit{ animation-duration:1s !important; }
+  #kg-gate.charging .g-seal{ animation:kgSealIn 1ms linear forwards, kgChargeSeal 2.0s ease forwards !important; }
+  #kg-gate.charging .g-title{ animation:kgClip 1.6s cubic-bezier(.72,0,.24,1) forwards; filter:brightness(1.12); }
+  #kg-gate.charging .g-line{ animation:kgLine 1.1s ease 1.5s forwards; }
+  #kg-gate.charging .g-sub{ animation:kgUp 1.0s ease 1.7s forwards; }
+  #kg-gate.charging .g-hint{ opacity:0 !important; animation:none !important; }
+  #kg-gate.charging .g-title::after{ content:""; position:absolute; inset:-4px -2px; pointer-events:none;
+    background:linear-gradient(90deg, transparent 0%, rgba(255,250,235,.6) 50%, transparent 100%);
+    background-size:42% 100%; background-repeat:no-repeat; mix-blend-mode:screen; animation:kgInk 1.6s ease-out forwards; }
+  @keyframes kgInk{ 0%{background-position:-42% 0; opacity:.9} 100%{background-position:142% 0; opacity:0} }
+  @keyframes kgChargeUp{ 0%{opacity:0; transform:scale(.6)} 100%{opacity:.95; transform:scale(1.28)} }
+  @keyframes kgChargeSeal{ 0%{box-shadow:0 0 28px 3px rgba(143,176,160,.12)} 70%{transform:scale(.95)} 100%{box-shadow:0 0 78px 20px rgba(143,176,160,.6); transform:scale(1.07)} }
+  #kg-gate.reveal .g-charge{ opacity:0 !important; transition:opacity .25s; }
+  #kg-gate.reveal .g-burst{ animation:kgBurst 1.5s cubic-bezier(.22,.61,.36,1) forwards; }
+  @keyframes kgBurst{ 0%{opacity:.95; transform:scale(0)} 55%{opacity:.5} 100%{opacity:0; transform:scale(52)} }
+  #kg-gate.reveal{ animation:kgReveal 1.55s cubic-bezier(.22,.61,.36,1) forwards; }
+  @keyframes kgReveal{ 0%{opacity:1; transform:scale(1); filter:blur(0)} 100%{opacity:0; transform:scale(1.1); filter:blur(7px); visibility:hidden} }
+  @media (prefers-reduced-motion:reduce){
+    #kg-gate .g-seal,#kg-gate .g-title,#kg-gate .g-line,#kg-gate .g-sub{ animation-duration:1ms !important; animation-delay:0s !important; animation-iteration-count:1 !important; }
+    #kg-gate .g-orbit{ display:none; }
+    #kg-gate .g-title{ clip-path:inset(0 0 0 0) !important; }
+    #kg-gate .g-line{ width:300px !important; }
+    #kg-gate .g-sub,#kg-gate .g-eyebrow,#kg-gate .g-ara{ opacity:1 !important; }
+  }
 </style>
 </head>
 <body>
+<div id="kg-gate" aria-hidden="true">
+  <div class="g-eyebrow">企業道</div>
+  <span class="g-emblem"><span class="g-charge" aria-hidden="true"></span><span class="g-orbit" aria-hidden="true"></span><span class="g-seal">監</span><span class="g-burst" aria-hidden="true"></span></span>
+  <div class="g-title">監視</div>
+  <div class="g-line"></div>
+  <div class="g-sub">Kanshi — Rust Team Watch</div>
+  <div class="g-ara" aria-hidden="true" title="Ara. — by Arakawa">Ara<i>.</i></div>
+  <div class="g-hint">クリックで入室</div>
+</div>
+<script>
+(function(){
+  var g=document.getElementById('kg-gate'); if(!g) return;
+  // 入室演出は「1回限り」。同じタブで開いている間は再生せず、開き直す（新タブ/ウィンドウ）とまた鳴る。
+  try{ if(sessionStorage.getItem('kgGateShown')){ g.style.display='none'; return; } sessionStorage.setItem('kgGateShown','1'); }catch(e){}
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+  var done=false, autoT;
+  var CHARGE=2100, REVEAL=1550;   // 題字を筆で描く→光が弾けて開く（音と同期・ゆっくりめ）
+  function dismiss(withSound){
+    if(done) return; done=true;
+    clearTimeout(autoT);
+    g.removeEventListener('pointerdown', onGesture);
+    document.removeEventListener('keydown', onKey);
+    if(reduce){ g.classList.add('hide'); setTimeout(function(){ g.style.display='none'; }, 360); return; }
+    if(withSound){ try{ playEnterSound(); }catch(e){} }
+    g.classList.add('charging');
+    setTimeout(function(){ g.classList.add('reveal'); }, CHARGE);
+    setTimeout(function(){ g.style.display='none'; }, CHARGE+REVEAL+150);
+  }
+  function onGesture(){ dismiss(true); }
+  function onKey(e){ if(e.key==='Enter'||e.key===' '||e.key==='Escape'){ dismiss(e.key!=='Escape'); } }
+  g.addEventListener('pointerdown', onGesture);
+  document.addEventListener('keydown', onKey);
+  // リンクから開く＝クリック無しでは音が鳴らない（ブラウザの自動再生ブロック）。
+  // そこで「タップ/クリックで入室」＝タップで確実に音つき演出。無操作なら6秒後に静かに自動で開く（保険）。
+  autoT=setTimeout(function(){ dismiss(false); }, reduce?900:6000);
+
+  /* 入室サウンド（Web Audio・外部ファイルなし・企業道OSと共通の設計） */
+  function playEnterSound(){
+    var AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
+    var ac=new AC();
+    function schedule(){
+    var now=ac.currentTime, tp=now+2.0;   // tp＝光が弾ける瞬間（題字を描き終えたあと）
+    var limiter=ac.createDynamicsCompressor();
+    limiter.threshold.value=-8; limiter.knee.value=24; limiter.ratio.value=12;
+    limiter.attack.value=0.003; limiter.release.value=0.25; limiter.connect(ac.destination);
+    var master=ac.createGain(); master.gain.value=0.20; master.connect(limiter);
+    var irLen=Math.floor(ac.sampleRate*3.2), ir=ac.createBuffer(2,irLen,ac.sampleRate);
+    for(var ch=0;ch<2;ch++){ var d=ir.getChannelData(ch);
+      for(var i=0;i<irLen;i++){ d[i]=(Math.random()*2-1)*Math.pow(1-i/irLen,2.2); } }
+    var conv=ac.createConvolver(); conv.buffer=ir;
+    var wet=ac.createGain(); wet.gain.value=0.40; conv.connect(wet).connect(master);
+    function send(node){ node.connect(master); node.connect(conv); }
+    (function(){ var o=ac.createOscillator(); o.type='sine'; o.frequency.value=783.99;
+      var g0=ac.createGain(); g0.gain.setValueAtTime(0.0001,now); g0.gain.exponentialRampToValueAtTime(0.045,now+0.012);
+      g0.gain.exponentialRampToValueAtTime(0.0001,now+0.6); o.connect(g0); send(g0); o.start(now); o.stop(now+0.65); })();
+    function stroke(t,dur,f0,f1,vel){
+      var len=Math.floor(ac.sampleRate*dur), b=ac.createBuffer(1,len,ac.sampleRate), bd=b.getChannelData(0);
+      for(var k=0;k<len;k++){ bd[k]=(Math.random()*2-1)*(0.35+0.65*k/len); }
+      var s=ac.createBufferSource(); s.buffer=b;
+      var bp=ac.createBiquadFilter(); bp.type='bandpass'; bp.Q.value=0.7;
+      bp.frequency.setValueAtTime(f0,t); bp.frequency.linearRampToValueAtTime(f1,t+dur);
+      var gg=ac.createGain(); gg.gain.setValueAtTime(0.0001,t);
+      gg.gain.linearRampToValueAtTime(vel,t+dur*0.35); gg.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+      s.connect(bp).connect(gg); send(gg); s.start(t); s.stop(t+dur+0.02);
+    }
+    stroke(now+0.20,0.30,1900,3200,0.020);
+    stroke(now+0.72,0.32,1700,3000,0.020);
+    stroke(now+1.24,0.38,1500,2800,0.022);
+    var rb=ac.createBuffer(1,Math.floor(ac.sampleRate*2.0),ac.sampleRate), rd=rb.getChannelData(0);
+    for(var j=0;j<rd.length;j++) rd[j]=(Math.random()*2-1);
+    var rs=ac.createBufferSource(); rs.buffer=rb;
+    var rbp=ac.createBiquadFilter(); rbp.type='bandpass'; rbp.Q.value=1.2;
+    rbp.frequency.setValueAtTime(140,now+0.6); rbp.frequency.exponentialRampToValueAtTime(3000,tp);
+    var rg=ac.createGain(); rg.gain.setValueAtTime(0.0001,now+0.6);
+    rg.gain.exponentialRampToValueAtTime(0.06,tp-0.03); rg.gain.exponentialRampToValueAtTime(0.0001,tp+0.14);
+    rs.connect(rbp).connect(rg); send(rg); rs.start(now); rs.stop(now+2.0);
+    var sub=ac.createOscillator(); sub.type='sine';
+    sub.frequency.setValueAtTime(72,tp); sub.frequency.exponentialRampToValueAtTime(26,tp+0.6);
+    var sg=ac.createGain(); sg.gain.setValueAtTime(0.0001,tp);
+    sg.gain.exponentialRampToValueAtTime(0.44,tp+0.015); sg.gain.exponentialRampToValueAtTime(0.0001,tp+1.1);
+    sub.connect(sg).connect(master); sub.start(tp); sub.stop(tp+1.2);
+    var drone=ac.createGain(); drone.gain.setValueAtTime(0.0001,now);
+    drone.gain.exponentialRampToValueAtTime(0.28,tp+0.6); drone.gain.exponentialRampToValueAtTime(0.0001,tp+3.6);
+    var dlp=ac.createBiquadFilter(); dlp.type='lowpass'; dlp.frequency.value=280;
+    drone.connect(dlp); send(dlp);
+    [32.70,49.00,65.41,98.00].forEach(function(f,i){var o=ac.createOscillator();o.type=i>1?'triangle':'sine';
+      o.frequency.value=f;o.detune.value=(i-1)*4;o.connect(drone);o.start(now);o.stop(tp+3.7);});
+    function voice(freq,t,dur,vel){
+      var o=ac.createOscillator(); o.type='sine'; o.frequency.value=freq;
+      var o2=ac.createOscillator(); o2.type='sine'; o2.frequency.value=freq; o2.detune.value=8;
+      var o3=ac.createOscillator(); o3.type='triangle'; o3.frequency.value=freq*2; o3.detune.value=-5;
+      var lp=ac.createBiquadFilter(); lp.type='lowpass';
+      lp.frequency.setValueAtTime(760,t); lp.frequency.exponentialRampToValueAtTime(2100,t+0.28);
+      lp.frequency.exponentialRampToValueAtTime(850,t+dur);
+      var gg=ac.createGain(); gg.gain.setValueAtTime(0.0001,t);
+      gg.gain.exponentialRampToValueAtTime(vel,t+0.24); gg.gain.setValueAtTime(vel,t+dur*0.55);
+      gg.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+      var h=ac.createGain(); h.gain.value=0.22; o3.connect(h).connect(lp);
+      o.connect(lp); o2.connect(lp); lp.connect(gg); send(gg);
+      o.start(t); o2.start(t); o3.start(t); o.stop(t+dur+0.05); o2.stop(t+dur+0.05); o3.stop(t+dur+0.05);
+    }
+    [32.70,49.00,73.42,110.00,164.81].forEach(function(f,i){ voice(f, tp+i*0.05, 3.1-i*0.14, 0.13-i*0.009); });
+    [329.63,493.88,659.25].forEach(function(f,i){ voice(f, tp+0.45+i*0.16, 2.0, 0.03); });
+    master.gain.setValueAtTime(0.20,tp+3.2);
+    master.gain.exponentialRampToValueAtTime(0.0001,tp+4.2);
+    setTimeout(function(){try{ac.close();}catch(e){}},6000);
+    }
+    if(ac.state==='running'){ schedule(); }
+    else if(ac.resume){ ac.resume().then(function(){ if(ac.state==='running') schedule(); }).catch(function(){}); }
+  }
+})();
+</script>
 <div class="wrap" id="app-content">
   <header class="page-head">
     <div class="page-head-title">
