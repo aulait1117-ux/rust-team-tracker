@@ -2620,9 +2620,9 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     for (var i = 0; i < RARITIES.length; i++) { if (level >= RARITIES[i].minLevel) r = RARITIES[i]; }
     return r;
   }
-  var LEVEL_EXP_K = 20, LEVEL_EXP_P = 1.9;  // Lv100到達に約12万EXP。プレイ時間主軸でもサクサク上がるカーブに緩和（旧K28/P2.45＝約190万EXP・2026-07-10 社長要望）。
-  var IN_EXP_PER_HOUR = 100;                // 味方：プレイ時間(IN時間)1hで100EXP。プレイ時間だけでレベルが上がる主軸に（旧8・2026-07-10 社長要望）
-  var IN_EXP_PER_HOUR_ENEMY = 150;          // 敵：ファーム記録が付けられない分さらにブースト（味方の1.5倍。旧55）
+  var LEVEL_EXP_K = 12, LEVEL_EXP_P = 1.6;  // Lv100到達に約1.9万EXP（純プレイ約63h）。さらに上がりやすく緩和（2026-07-10 社長要望②。旧20/1.9→約12万EXP、さらに前は28/2.45＝約190万EXP）。
+  var IN_EXP_PER_HOUR = 300;                // 味方：プレイ時間(IN時間)1hで300EXP。さらにUP（旧100→2026-07-10 社長要望②。もとは8）
+  var IN_EXP_PER_HOUR_ENEMY = 400;          // 敵：ファーム記録が付けられない分さらにブースト（旧150。もとは55）
   // ファーム記録：rustoriaのRESOURCES画面のスクショを貼り、写っている数値を入力する（スクショが証拠）。
   // 資源ごとに単価が違う（硫黄・高品質金属は高い、石・木は安い）。照合システムは無し。
   // ※単価は設計値（ゲーム事実ではない）。ここを変えるだけで全記録のEXPが再計算される。
