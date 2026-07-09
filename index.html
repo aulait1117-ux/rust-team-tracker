@@ -912,19 +912,36 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
   // 監視中のBattleMetricsサーバー → rustoria.coのサーバースラッグ（ファーム数リンク用の逆引き。
   // ranking.htmlのBM_SERVER_ID_BY_RUSTORIAの逆）。未登録サーバーはrustoria側で手動選択に案内する。
   var RUSTORIA_SERVER_BY_BM = { "6324892": "vanilla_main_us" };
-  // 味方メンバーの「🌾 ファーム数を見る」＝rustoria.coの該当サーバーのリーダーボードを新タブで開く
-  // （社長はログイン済みなので味方の数字が見える）。rustoriaがAPIをログイン必須化したためツール内での
-  // 自動取得はせず、公式ページへ飛ばす方式にする（規約・BANリスクなし）。
-  function openRustoriaFarm(name) {
-    var slug = RUSTORIA_SERVER_BY_BM[String(BM_SERVER_ID)];
-    var url = "https://rustoria.co/leaderboards";
-    if (slug) {
-      url += "?server=" + encodeURIComponent(slug);
-      if (name && name.trim()) url += "&username=" + encodeURIComponent(name.trim());
-    } else {
-      toast("rustoria.coでサーバーを選んで「" + (name || "") + "」を検索してほしい（この監視サーバーはrustoria未マッピング）");
+  // 味方メンバーの「📊 スタッツを見る」＝その人のrustoria.coプロフィール（users/<id>＝あの数字カード画面）を
+  // 新タブで開く。プロフィールURLは初回だけ社長が貼る（rustoriaで名前クリック→URLをコピー）→端末に保存し、
+  // 次回からすぐ開く。rustoriaがログイン必須化したためツール内取得はせず公式ページへ飛ばす（規約・BANリスクなし）。
+  function rustoriaProfileKey(member) {
+    return "kg-rustoria-profile-" + (member.steamId ? ("s:" + member.steamId) : ("n:" + (member.name || "").toLowerCase()));
+  }
+  function extractRustoriaId(input) {
+    var s = String(input || "").trim();
+    var m = s.match(/users\/([A-Za-z0-9]{12,})/);
+    if (m) return m[1];
+    if (/^[A-Za-z0-9]{12,}$/.test(s)) return s;
+    return null;
+  }
+  function openRustoriaProfile(member) {
+    var key = rustoriaProfileKey(member);
+    var id = null;
+    try { id = localStorage.getItem(key); } catch (e) { /* ignore */ }
+    if (!id) {
+      var input = window.prompt(
+        (member.name || "この人") + " のrustoriaプロフィールを開くには、その人のrustoriaページのURLを1回だけ貼ってください。\n" +
+        "（rustoria.coでその人の名前をクリック → アドレス欄のURLをコピー → ここに貼る）\n" +
+        "例: https://rustoria.co/users/xxxxxxxxxxxx"
+      );
+      if (!input) return;
+      id = extractRustoriaId(input);
+      if (!id) { toast("⚠ URLを読み取れなかった。rustoria.co/users/… の形で貼ってほしい"); return; }
+      try { localStorage.setItem(key, id); } catch (e) { /* ignore */ }
+      toast("✓ " + (member.name || "") + " のプロフィールを登録した（次回からすぐ開く）");
     }
-    window.open(url, "_blank", "noopener");
+    window.open("https://rustoria.co/users/" + encodeURIComponent(id), "_blank", "noopener");
   }
 
   function bmPlayersApiUrl() {
@@ -2338,9 +2355,9 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
           farmBtn = document.createElement("button");
           farmBtn.type = "button";
           farmBtn.className = "trend-btn";
-          farmBtn.textContent = "🌾 ファーム数を見る";
-          farmBtn.title = "rustoria.coでこの人のファーム数を見る（新しいタブで開く）";
-          farmBtn.addEventListener("click", function () { openRustoriaFarm(member.name); });
+          farmBtn.textContent = "📊 スタッツを見る";
+          farmBtn.title = "rustoria.coでこの人の全スタッツ（プロフィール＝ファーム/キル等のカード画面）を新しいタブで開く";
+          farmBtn.addEventListener("click", function () { openRustoriaProfile(member); });
         }
 
         var linkBtn = null;
