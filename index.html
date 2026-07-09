@@ -4,8 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>敵チーム監視 - Rustチーム管理ツール</title>
-<link rel="icon" type="image/svg+xml" href="favicon.svg" />
-<link rel="alternate icon" href="favicon.ico" />
+<link rel="icon" type="image/svg+xml" href="favicon.svg?v=2" />
+<link rel="alternate icon" href="favicon.ico?v=2" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Shippori+Mincho:wght@500;600;700&display=swap" rel="stylesheet">
@@ -288,6 +288,13 @@
   }
   .team-card[data-team-type="friend"] { border-left-color: var(--moss); }
   .team-card[data-team-type="enemy"] { border-left-color: var(--alert); }
+  .server-live { font-family: var(--font-mono); font-size: 12.5px; color: var(--text-muted); margin-top: 4px; }
+  .server-live b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .friend-section { margin: 16px 0 12px; }
+  .friend-head { font-size: 15px; color: var(--moss); margin: 0 0 8px; letter-spacing: 0.02em; }
+  .team-card.friend-compact { padding: 10px 12px; }
+  .team-card.friend-compact .team-card-top { margin-bottom: 0; }
+  .team-card.friend-compact input[type="text"] { flex: 1 1 auto; }
   .team-card-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
   .type-toggle {
     flex: none; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.03em;
@@ -659,10 +666,10 @@
     <div class="page-head-title">
       <span class="eyebrow" id="server-eyebrow">Rustoria.co · US Main</span>
       <h1>敵チーム監視</h1>
+      <div class="server-live" id="server-live-info">サーバー情報を取得中…</div>
     </div>
     <div class="hero-actions">
       <button class="btn-ghost" id="server-switch-btn" type="button">🔄 サーバーを変更</button>
-      <a class="btn-ghost" href="ranking.html">📊 ファームランキングへ</a>
       <button class="btn-ghost" id="help-btn" type="button">❓ 使い方</button>
     </div>
   </header>
@@ -676,6 +683,11 @@
       <button class="btn-ghost" id="export-backup-btn" type="button">📥 バックアップをダウンロード</button>
     </div>
   </div>
+
+  <section class="friend-section" id="friend-section" aria-labelledby="friend-head">
+    <h2 id="friend-head" class="friend-head">味方チーム</h2>
+    <div class="teams-grid" id="friend-cards"></div>
+  </section>
 
   <div class="global-bar" id="global-bar" aria-live="polite">
     <span class="global-bar-status"><span id="global-bar-icon"></span>敵 <b id="global-online-count">0</b> 人 IN中</span>
@@ -911,7 +923,38 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
 
   // 監視中のBattleMetricsサーバー → rustoria.coのサーバースラッグ（ファーム数リンク用の逆引き。
   // ranking.htmlのBM_SERVER_ID_BY_RUSTORIAの逆）。未登録サーバーはrustoria側で手動選択に案内する。
-  var RUSTORIA_SERVER_BY_BM = { "6324892": "vanilla_main_us" };
+  var RUSTORIA_SERVER_BY_BM = { "6324892": "vanilla_main_us", "16616210": "vanilla_low_pop_us" };
+  // 味方チームの「🌾 ファーム数を見る」＝今見ているサーバーのrustoria.coファームランキングを新タブで開く。
+  function openRustoriaTeamFarm() {
+    var slug = RUSTORIA_SERVER_BY_BM[String(BM_SERVER_ID)];
+    var url = slug ? ("https://rustoria.co/leaderboards?server=" + encodeURIComponent(slug)) : "https://rustoria.co/leaderboards";
+    if (!slug) toast("rustoria.coでサーバーを選んでほしい（この監視サーバーはrustoria未マッピング）");
+    window.open(url, "_blank", "noopener");
+  }
+  // サーバーの現在人数と次のワイプをBattleMetricsから取得しヘッダーに表示（ゲーム内時間は公開データに無いため非対応）。
+  function fetchServerInfo() {
+    var el = document.getElementById("server-live-info");
+    if (!el) return;
+    fetch("https://api.battlemetrics.com/servers/" + BM_SERVER_ID).then(function (r) {
+      if (!r.ok) throw new Error("bm server " + r.status);
+      return r.json();
+    }).then(function (j) {
+      var a = (j.data && j.data.attributes) || {};
+      var parts = [];
+      if (a.players != null) parts.push("現在 <b>" + a.players + (a.maxPlayers ? "/" + a.maxPlayers : "") + "</b>人IN");
+      var nw = a.details && a.details.rust_next_wipe;
+      if (nw) {
+        var d = new Date(nw);
+        if (!isNaN(d.getTime())) {
+          var days = Math.ceil((d.getTime() - Date.now()) / 86400000);
+          var mm = d.getMonth() + 1, dd = d.getDate();
+          var hh = ("0" + d.getHours()).slice(-2), mi = ("0" + d.getMinutes()).slice(-2);
+          parts.push("次ワイプ <b>" + mm + "/" + dd + " " + hh + ":" + mi + "</b>" + (days >= 0 ? "（あと" + days + "日）" : ""));
+        }
+      }
+      el.innerHTML = parts.length ? parts.join("　·　") : "サーバー情報なし";
+    }).catch(function () { el.textContent = "サーバー情報の取得に失敗（時間をおいて再取得）"; });
+  }
   // 味方メンバーの「📊 スタッツを見る」＝その人のrustoria.coプロフィール（users/<id>＝あの数字カード画面）を
   // 新タブで開く。プロフィールURLは初回だけ社長が貼る（rustoriaで名前クリック→URLをコピー）→端末に保存し、
   // 次回からすぐ開く。rustoriaがログイン必須化したためツール内取得はせず公式ページへ飛ばす（規約・BANリスクなし）。
@@ -2144,6 +2187,60 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     if (backdrop) backdrop.addEventListener("click", function (e) { if (e.target === backdrop) { backdrop.hidden = true; hideTrendTooltip(); } });
   })();
 
+  // 味方チーム＝クラン名＋「ファーム数を見る」ボタンだけのコンパクト表示（メンバー行・オンライン監視なし）。
+  // 敵バーの上に固定表示する。敵チームの本格監視はrenderTeamsList側（下段）。
+  function renderFriendTeams() {
+    var container = document.getElementById("friend-cards");
+    var section = document.getElementById("friend-section");
+    if (!container) return;
+    var friends = teamsState.teams.filter(function (t) { return t.type === "friend"; });
+    if (section) section.style.display = friends.length ? "" : "none";
+    container.innerHTML = "";
+    friends.forEach(function (team) {
+      var card = document.createElement("div");
+      card.className = "team-card friend-compact";
+      card.dataset.teamId = team.id;
+      card.dataset.teamType = "friend";
+      var top = document.createElement("div");
+      top.className = "team-card-top";
+      var typeBtn = document.createElement("button");
+      typeBtn.type = "button";
+      typeBtn.className = "type-toggle friend";
+      typeBtn.textContent = "🟢 味方";
+      typeBtn.title = "クリックで敵チーム（監視対象）に切替";
+      typeBtn.addEventListener("click", function () { team.type = "enemy"; saveTeamsState(); renderTeamsList(); });
+      var nameInput = document.createElement("input");
+      nameInput.type = "text";
+      nameInput.value = team.name;
+      nameInput.dataset.field = "team-name";
+      nameInput.setAttribute("aria-label", "クラン名");
+      nameInput.addEventListener("change", function () { team.name = nameInput.value.trim() || team.name; nameInput.value = team.name; saveTeamsState(); });
+      var farmBtn = document.createElement("button");
+      farmBtn.type = "button";
+      farmBtn.className = "btn-ghost";
+      farmBtn.textContent = "🌾 ファーム数を見る";
+      farmBtn.title = "rustoria.coでこのサーバーのファームランキングを開く";
+      farmBtn.addEventListener("click", function () { openRustoriaTeamFarm(); });
+      var delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "del";
+      delBtn.setAttribute("aria-label", team.name + " を削除");
+      delBtn.textContent = "×";
+      delBtn.addEventListener("click", function () {
+        if (!window.confirm(team.name + " を削除する？")) return;
+        teamsState.teams = teamsState.teams.filter(function (x) { return x.id !== team.id; });
+        saveTeamsState();
+        renderTeamsList();
+      });
+      top.appendChild(typeBtn);
+      top.appendChild(nameInput);
+      top.appendChild(farmBtn);
+      top.appendChild(delBtn);
+      card.appendChild(top);
+      container.appendChild(card);
+    });
+  }
+
   function renderTeamsList() {
     var container = document.getElementById("teams-cards");
     var active = document.activeElement;
@@ -2163,10 +2260,12 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       };
     }
 
-    document.getElementById("teams-count").textContent = teamsState.teams.length;
+    renderFriendTeams();
+    var enemyTeams = teamsState.teams.filter(function (t) { return t.type !== "friend"; });
+    document.getElementById("teams-count").textContent = enemyTeams.length;
     container.innerHTML = "";
 
-    if (teamsState.teams.length === 0) {
+    if (enemyTeams.length === 0) {
       var note = document.createElement("div");
       note.className = "empty-note";
       note.textContent = "登録済みの敵チームがない。上の「＋ チーム追加」から登録できる。";
@@ -2174,7 +2273,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       return;
     }
 
-    teamsState.teams.forEach(function (team) {
+    enemyTeams.forEach(function (team) {
       var card = document.createElement("div");
       card.className = "team-card";
       card.dataset.teamId = team.id;
@@ -2642,6 +2741,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     BM_SERVER_NAME = name;
     try { localStorage.setItem(BM_SERVER_STORAGE_KEY, JSON.stringify({ id: id, name: name })); } catch (e) { /* ignore */ }
     updateServerEyebrow();
+    fetchServerInfo();
     document.getElementById("server-modal-backdrop").hidden = true;
     toast("🔄 監視サーバーを「" + name + "」に変更した");
     lastKnownOnlineNamesLower = [];
@@ -2696,6 +2796,8 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
   });
 
   updateServerEyebrow();
+  fetchServerInfo();
+  setInterval(fetchServerInfo, 90000);
 
   /* ---------- session history: login trend tracking ---------- */
   var SESSION_MAX_AGE_MS = 60 * 24 * 60 * 60 * 1000; // 60 days
