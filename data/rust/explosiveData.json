@@ -1,0 +1,14 @@
+{
+  "_note": "Rustの爆発物1個あたりのクラフト素材コスト。数値はコミュニティ一般値で、ゲーム内一次確認は未実施のため isVerified=false。アップデートで変わるためコードに直書きせずここで管理する。sulfurCost=硫黄、gunpowderCost=火薬、charcoalCost=木炭、metalFragmentsCost=金属片、lowGradeFuelCost=低品質燃料。null=そのコストは該当しない/未確認。",
+  "explosives": [
+    { "id": "c4", "name": "C4", "sulfurCost": 2200, "gunpowderCost": 1000, "charcoalCost": null, "metalFragmentsCost": 200, "lowGradeFuelCost": null, "notes": "Timed Explosive Charge。構造物への最有力。硫黄は火薬経由の総量目安。", "lastVerified": "2026-07-09", "isVerified": false },
+    { "id": "rocket", "name": "ロケット", "sulfurCost": 1400, "gunpowderCost": 730, "charcoalCost": null, "metalFragmentsCost": 150, "lowGradeFuelCost": 30, "notes": "ロケットランチャー弾。構造物レイドの定番。", "lastVerified": "2026-07-09", "isVerified": false },
+    { "id": "hv_rocket", "name": "高速ロケット", "sulfurCost": 1000, "gunpowderCost": 400, "charcoalCost": null, "metalFragmentsCost": 100, "lowGradeFuelCost": 25, "notes": "高速ロケット。対人向けで構造物ダメージは低い。壁破壊には非効率。", "lastVerified": "2026-07-09", "isVerified": false },
+    { "id": "satchel", "name": "サッチェル", "sulfurCost": 480, "gunpowderCost": 240, "charcoalCost": null, "metalFragmentsCost": 80, "lowGradeFuelCost": null, "notes": "サッチェル。安いが不発あり。序盤レイド向け。", "lastVerified": "2026-07-09", "isVerified": false },
+    { "id": "beancan", "name": "ビーンカン", "sulfurCost": 120, "gunpowderCost": 60, "charcoalCost": null, "metalFragmentsCost": 20, "lowGradeFuelCost": null, "notes": "ビーンカン手榴弾。不発率高め。ドア/木製向け。", "lastVerified": "2026-07-09", "isVerified": false },
+    { "id": "explosive_ammo", "name": "爆発弾(5.56)", "sulfurCost": 25, "gunpowderCost": 10, "charcoalCost": null, "metalFragmentsCost": 5, "lowGradeFuelCost": null, "notes": "爆発弾(1発あたり)。銃で連射して破壊。数が多く要る。", "lastVerified": "2026-07-09", "isVerified": false },
+    { "id": "f1_grenade", "name": "F1グレネード", "sulfurCost": 100, "gunpowderCost": 30, "charcoalCost": null, "metalFragmentsCost": null, "lowGradeFuelCost": null, "notes": "F1手榴弾。ドア/木製に。構造物には非効率。", "lastVerified": "2026-07-09", "isVerified": false },
+    { "id": "flamethrower", "name": "火炎放射器", "sulfurCost": null, "gunpowderCost": null, "charcoalCost": null, "metalFragmentsCost": null, "lowGradeFuelCost": 100, "notes": "火炎放射器。低品質燃料消費。木製構造物のみ有効。硫黄は使わない。", "lastVerified": "2026-07-09", "isVerified": false },
+    { "id": "melee", "name": "近接/工具", "sulfurCost": null, "gunpowderCost": null, "charcoalCost": null, "metalFragmentsCost": null, "lowGradeFuelCost": null, "notes": "近接/工具。時間はかかるが素材コストほぼ0。木製・弱いドア向け。", "lastVerified": "2026-07-09", "isVerified": false }
+  ]
+}

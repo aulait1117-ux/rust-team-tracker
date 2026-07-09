@@ -1,0 +1,42 @@
+{
+  "_note": "対象オブジェクト×攻撃手段ごとの必要数(requiredAmount)。ハード面基準・コミュニティ一般値で isVerified=false（ゲーム内一次確認前・アップデートで変動）。totalSulfur等の合計はアプリ側で requiredAmount × explosiveData のコストから算出する（ここに重複保存しない）。ここに無い組み合わせはUIで『データ未登録』と表示する。requiredAmount は不発・端数を考慮した実用個数の目安。",
+  "costs": [
+    { "targetId": "door_wood", "weaponId": "satchel", "requiredAmount": 1, "notes": "木ドアはサッチェル1でほぼ割れる", "lastVerified": "2026-07-09", "isVerified": false },
+    { "targetId": "door_wood", "weaponId": "beancan", "requiredAmount": 2, "notes": "", "lastVerified": "2026-07-09", "isVerified": false },
+    { "targetId": "door_wood", "weaponId": "c4", "requiredAmount": 1, "notes": "オーバーキル", "lastVerified": "2026-07-09", "isVerified": false },
+
+    { "targetId": "door_sheet", "weaponId": "c4", "requiredAmount": 1, "notes": "定番。C4×1", "lastVerified": "2026-07-09", "isVerified": false },
+    { "targetId": "door_sheet", "weaponId": "rocket", "requiredAmount": 2, "notes": "", "lastVerified": "2026-07-09", "isVerified": false },
+    { "targetId": "door_sheet", "weaponId": "satchel", "requiredAmount": 4, "notes": "不発考慮で5持ち推奨", "lastVerified": "2026-07-09", "isVerified": false },
+    { "targetId": "door_sheet", "weaponId": "beancan", "requiredAmount": 9, "notes": "不発多い", "lastVerified": "2026-07-09", "isVerified": false },
+
+    { "targetId": "door_double", "weaponId": "c4", "requiredAmount": 1, "notes": "", "lastVerified": "2026-07-09", "isVerified": false },
+    { "targetId": "door_double", "weaponId": "rocket", "requiredAmount": 2, "notes": "", "lastVerified": "2026-07-09", "isVerified": false },
+    { "targetId": "door_double", "weaponId": "satchel", "requiredAmount": 4, "notes": "", "lastVerified": "2026-07-09", "isVerified": false },
+
+    { "targetId": "door_garage", "weaponId": "c4", "requiredAmount": 3, "notes": "", "lastVerified": "2026-07-09", "isVerified": false },
+    { "targetId": "door_garage", "weaponId": "rocket", "requiredAmount": 6, "notes": "", "lastVerified": "2026-07-09", "isVerified": false },
+    { "targetId": "door_garage", "weaponId": "satchel", "requiredAmount": 11, "notes": "", "lastVerified": "2026-07-09", "isVerified": false },
+
+    { "targetId": "door_armored", "weaponId": "c4", "requiredAmount": 3, "notes": "", "lastVerified": "2026-07-09", "isVerified": false },
+    { "targetId": "door_armored", "weaponId": "rocket", "requiredAmount": 5, "notes": "", "lastVerified": "2026-07-09", "isVerified": false },
+    { "targetId": "door_armored", "weaponId": "satchel", "requiredAmount": 11, "notes": "", "lastVerified": "2026-07-09", "isVerified": false },
+
+    { "targetId": "wall_wood", "weaponId": "satchel", "requiredAmount": 2, "notes": "木壁は火炎/斧も有効", "lastVerified": "2026-07-09", "isVerified": false },
+    { "targetId": "wall_wood", "weaponId": "c4", "requiredAmount": 1, "notes": "", "lastVerified": "2026-07-09", "isVerified": false },
+    { "targetId": "wall_wood", "weaponId": "rocket", "requiredAmount": 1, "notes": "", "lastVerified": "2026-07-09", "isVerified": false },
+
+    { "targetId": "wall_stone", "weaponId": "c4", "requiredAmount": 2, "notes": "ハード面。ソフト面はより安い", "lastVerified": "2026-07-09", "isVerified": false },
+    { "targetId": "wall_stone", "weaponId": "rocket", "requiredAmount": 4, "notes": "", "lastVerified": "2026-07-09", "isVerified": false },
+    { "targetId": "wall_stone", "weaponId": "satchel", "requiredAmount": 10, "notes": "", "lastVerified": "2026-07-09", "isVerified": false },
+
+    { "targetId": "wall_metal", "weaponId": "c4", "requiredAmount": 4, "notes": "", "lastVerified": "2026-07-09", "isVerified": false },
+    { "targetId": "wall_metal", "weaponId": "rocket", "requiredAmount": 8, "notes": "", "lastVerified": "2026-07-09", "isVerified": false },
+    { "targetId": "wall_metal", "weaponId": "satchel", "requiredAmount": 23, "notes": "", "lastVerified": "2026-07-09", "isVerified": false },
+
+    { "targetId": "wall_armored", "weaponId": "c4", "requiredAmount": 8, "notes": "最硬", "lastVerified": "2026-07-09", "isVerified": false },
+    { "targetId": "wall_armored", "weaponId": "rocket", "requiredAmount": 15, "notes": "", "lastVerified": "2026-07-09", "isVerified": false },
+
+    { "targetId": "wall_external_high", "weaponId": "explosive_ammo", "requiredAmount": 40, "notes": "石の高い外壁の目安。銃で撃つ", "lastVerified": "2026-07-09", "isVerified": false }
+  ]
+}

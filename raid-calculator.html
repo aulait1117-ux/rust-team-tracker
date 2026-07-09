@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Raid Calculator｜RAIDAR</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="alternate icon" href="favicon.ico" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Shippori+Mincho:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #16140f; --surface: #201c15; --surface-raised: #26221a;
+    --line: #2f2a20; --line-soft: #241f18;
+    --text: #f0eadc; --text-muted: #9c937f; --text-faint: #726b59;
+    --rust: #8fb0a0; --rust-bright: #a9c6b8; --moss: #8fb96e; --amber: #d6ab57; --alert: #e0705a;
+    --accent: #8fb0a0; --accent-dim: rgba(143,176,160,.16);
+    --font-display: "Shippori Mincho", "Yu Mincho", "Hiragino Mincho ProN", serif;
+    --font-serif: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+    --font-body: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, system-ui, sans-serif;
+    --font-mono: "Cascadia Mono", "Consolas", "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--ink); color: var(--text); font-family: var(--font-body); font-size: 15px; line-height: 1.6; letter-spacing: .01em; -webkit-font-smoothing: antialiased; }
+  body { background-image:
+      radial-gradient(1050px 620px at 92% -8%, rgba(143,176,160,.07), transparent 60%),
+      radial-gradient(860px 540px at 5% 3%, rgba(214,171,87,.05), transparent 62%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E"); }
+  a { color: var(--rust-bright); }
+  button { font-family: inherit; }
+  :focus-visible { outline: 2px solid var(--rust-bright); outline-offset: 2px; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 0 20px 70px; }
+
+  .page-head { padding: 26px 0 4px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .page-head .eyebrow { display: block; margin-bottom: 4px; font-family: var(--font-serif); font-style: italic; font-size: 15px; letter-spacing: 0.1em; color: var(--accent); }
+  .page-head h1 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 26px; letter-spacing: 0.05em; }
+  .hero-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn-ghost { background: transparent; border: 1px solid var(--line); color: var(--text-muted); font-size: 12.5px; padding: 7px 12px; border-radius: 3px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-ghost:hover { border-color: var(--rust); color: var(--rust-bright); }
+  .btn-ghost[aria-current="page"] { border-color: var(--rust); color: var(--text); }
+
+  .calc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; align-items: start; }
+  .calc-col { min-width: 0; }
+  @media (max-width: 860px) { .calc-grid { grid-template-columns: 1fr; } }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 16px 18px; margin-top: 16px; }
+  .card > h2 { margin: 0 0 12px; font-family: var(--font-display); font-weight: 600; font-size: 16px; letter-spacing: .03em; color: var(--text); }
+  .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .card-head h2 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 16px; }
+
+  .data-banner { margin-top: 14px; border: 1px solid var(--amber); border-radius: 4px; padding: 10px 14px; font-size: 12.5px; color: var(--amber); background: rgba(214,171,87,.06); }
+  .data-banner.err { border-color: var(--alert); color: var(--alert); background: rgba(224,112,90,.06); }
+  .badge-unv { display: inline-block; font-size: 10.5px; font-family: var(--font-mono); color: var(--amber); border: 1px solid var(--amber); border-radius: 3px; padding: 1px 5px; margin-left: 6px; vertical-align: middle; }
+  .badge-missing { color: var(--alert); border-color: var(--alert); }
+
+  .target-row { display: grid; grid-template-columns: 1.1fr 1.5fr 74px 34px; gap: 8px; align-items: center; margin-bottom: 8px; }
+  select, input[type="number"] { background: var(--surface-raised); border: 1px solid var(--line); color: var(--text); font-size: 13px; padding: 8px 9px; border-radius: 3px; width: 100%; font-family: var(--font-body); }
+  input[type="number"] { text-align: center; font-family: var(--font-mono); }
+  .del-btn { background: transparent; border: 1px solid var(--line); color: var(--text-faint); border-radius: 3px; cursor: pointer; padding: 8px 0; }
+  .del-btn:hover { color: var(--alert); border-color: var(--alert); }
+  #add-target { margin-top: 4px; }
+
+  .result-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .stat { border: 1px solid var(--line); border-radius: 4px; padding: 13px 14px; }
+  .stat .lbl { font-size: 12px; color: var(--text-muted); font-family: var(--font-display); }
+  .stat .val { margin-top: 3px; font-family: var(--font-mono); font-weight: 700; font-size: 23px; line-height: 1.15; letter-spacing: 0.01em; color: var(--text); }
+  .stat .val small { font-family: var(--font-body); font-size: 12px; color: var(--text-muted); font-weight: 400; }
+  .stat.hero .val { color: var(--rust-bright); }
+
+  .breakdown { margin-top: 14px; }
+  .bd-row { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line-soft); font-size: 13.5px; }
+  .bd-row:last-child { border-bottom: none; }
+  .bd-row .r { font-family: var(--font-mono); color: var(--text-muted); white-space: nowrap; }
+  .bd-row .r b { color: var(--text); }
+
+  .cmp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .cmp-table th, .cmp-table td { text-align: right; padding: 8px 8px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+  .cmp-table th:first-child, .cmp-table td:first-child { text-align: left; }
+  .cmp-table th { color: var(--text-muted); font-weight: 600; font-size: 12px; }
+  .cmp-table td { font-family: var(--font-mono); color: var(--text); }
+  .cmp-table tr.best td { color: var(--moss); }
+  .cmp-note { font-size: 11.5px; color: var(--text-faint); }
+  .table-scroll { overflow-x: auto; }
+
+  textarea { width: 100%; background: var(--surface-raised); border: 1px solid var(--line); color: var(--text); font-family: var(--font-mono); font-size: 12.5px; line-height: 1.55; border-radius: 4px; padding: 12px; resize: vertical; }
+  .actions { margin-top: 18px; }
+  .muted { color: var(--text-muted); }
+  .empty { color: var(--text-faint); font-size: 13px; padding: 6px 0; }
+  .last-verified { font-size: 11.5px; color: var(--text-faint); font-family: var(--font-mono); margin-top: 10px; }
+
+  @media (max-width: 560px) {
+    .target-row { grid-template-columns: 1fr 1fr; grid-auto-rows: auto; }
+    .target-row .qty { grid-column: 1; }
+    .target-row .del-btn { grid-column: 2; }
+    .page-head h1 { font-size: 22px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="page-head">
+    <div>
+      <span class="eyebrow">RAIDAR</span>
+      <h1>Raid Calculator</h1>
+    </div>
+    <nav class="hero-actions">
+      <a class="btn-ghost" href="index.html">🎯 監視 Monitor</a>
+      <a class="btn-ghost" href="raid-calculator.html" aria-current="page">🧮 レイド計算</a>
+      <a class="btn-ghost" href="ranking.html">🏆 ランキング</a>
+    </nav>
+  </header>
+
+  <div class="actions" style="margin-top:12px"><button class="btn-ghost" id="reset-btn">↺ リセット</button></div>
+
+  <div class="calc-grid">
+    <div class="calc-col">
+      <section class="card">
+        <div class="card-head"><h2>対象オブジェクト</h2><button class="btn-ghost" id="add-target">＋ 対象を追加</button></div>
+        <div id="targets"></div>
+      </section>
+
+      <section class="card">
+        <h2>攻撃手段</h2>
+        <select id="weapon" aria-label="攻撃手段"></select>
+      </section>
+
+      <section class="card" id="result-card">
+        <div class="card-head"><h2>計算結果（合計）</h2><span id="result-badge"></span></div>
+        <div id="result"></div>
+      </section>
+    </div>
+
+    <div class="calc-col">
+      <section class="card" style="margin-top:0">
+        <h2>爆発物別コスト比較</h2>
+        <div class="table-scroll"><div id="comparison"></div></div>
+      </section>
+    </div>
+  </div>
+
+  <div class="data-banner" id="data-banner">データ読み込み中…</div>
+</div>
+
+<script>
+(function () {
+  var DATA = { explosives: [], structures: [], costs: [], updated: null };
+  var byExp = {}, byStruct = {}, costMap = {};
+  var COMPARE_WEAPONS = ["c4", "rocket", "satchel", "beancan"];
+  var CAT_LABELS = { building: "建築系", door: "ドア系", other: "その他" };
+  var state = { targets: [], weapon: "c4" };
+
+  function fmt(n) { return (n == null) ? "—" : Number(n).toLocaleString("ja-JP"); }
+  function costKey(t, w) { return t + "|" + w; }
+  function getCost(targetId, weaponId) { return costMap[costKey(targetId, weaponId)] || null; }
+
+  Promise.all([
+    fetch("data/rust/explosiveData.json").then(function (r) { return r.json(); }),
+    fetch("data/rust/structureData.json").then(function (r) { return r.json(); }),
+    fetch("data/rust/raidCostData.json").then(function (r) { return r.json(); })
+  ]).then(function (res) {
+    DATA.explosives = res[0].explosives || [];
+    DATA.structures = res[1].structures || [];
+    DATA.costs = res[2].costs || [];
+    DATA.explosives.forEach(function (e) { byExp[e.id] = e; });
+    DATA.structures.forEach(function (s) { byStruct[s.id] = s; });
+    DATA.costs.forEach(function (c) { costMap[costKey(c.targetId, c.weaponId)] = c; });
+    // 最も新しい lastVerified を全体の「データ最終更新日」とする
+    var dates = [].concat(DATA.explosives, DATA.structures, DATA.costs)
+      .map(function (x) { return x.lastVerified; }).filter(Boolean).sort();
+    DATA.updated = dates.length ? dates[dates.length - 1] : "不明";
+    initUI();
+  }).catch(function (e) {
+    var b = document.getElementById("data-banner");
+    b.className = "data-banner err";
+    b.textContent = "⚠ データファイルの読み込みに失敗しました（" + e.message + "）。localhost/本番など http で開いてください。";
+  });
+
+  function anyUnverifiedInData() {
+    return DATA.explosives.concat(DATA.costs).some(function (x) { return x.isVerified === false; });
+  }
+
+  function initUI() {
+    var b = document.getElementById("data-banner");
+    var unv = anyUnverifiedInData();
+    b.className = "data-banner";
+    b.innerHTML = (unv ? "⚠ <b>未確認データ</b>：数値はコミュニティ一般値です。ゲーム内で要確認（アップデートで変動）。" : "✔ データ確認済み。")
+      + " データ最終更新日：<b>" + DATA.updated + "</b>";
+
+    var wsel = document.getElementById("weapon");
+    wsel.innerHTML = DATA.explosives.map(function (e) {
+      return '<option value="' + e.id + '">' + esc(e.name) + '</option>';
+    }).join("");
+    wsel.value = state.weapon;
+    wsel.addEventListener("change", function () { state.weapon = wsel.value; recompute(); });
+
+    document.getElementById("add-target").addEventListener("click", function () { addTarget(); });
+    document.getElementById("reset-btn").addEventListener("click", function () {
+      state.targets = []; addTarget(); recompute();
+    });
+    addTarget();
+    recompute();
+  }
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]; }); }
+
+  function addTarget() {
+    var buildingFirst = DATA.structures.length ? DATA.structures[0] : null;
+    state.targets.push({ category: buildingFirst ? buildingFirst.category : "building", targetId: buildingFirst ? buildingFirst.id : "", qty: 1 });
+    renderTargets();
+  }
+
+  function renderTargets() {
+    var wrap = document.getElementById("targets");
+    wrap.innerHTML = "";
+    state.targets.forEach(function (t, i) {
+      var row = document.createElement("div");
+      row.className = "target-row";
+
+      var catSel = document.createElement("select");
+      catSel.setAttribute("aria-label", "カテゴリ");
+      Object.keys(CAT_LABELS).forEach(function (c) {
+        var o = document.createElement("option"); o.value = c; o.textContent = CAT_LABELS[c];
+        if (t.category === c) o.selected = true; catSel.appendChild(o);
+      });
+      catSel.addEventListener("change", function () {
+        t.category = catSel.value;
+        var first = DATA.structures.filter(function (s) { return s.category === t.category; })[0];
+        t.targetId = first ? first.id : "";
+        renderTargets(); recompute();
+      });
+
+      var objSel = document.createElement("select");
+      objSel.setAttribute("aria-label", "対象オブジェクト");
+      var opts = DATA.structures.filter(function (s) { return s.category === t.category; });
+      if (!opts.length) { var oe = document.createElement("option"); oe.textContent = "未登録"; objSel.appendChild(oe); objSel.disabled = true; }
+      opts.forEach(function (s) {
+        var o = document.createElement("option"); o.value = s.id;
+        o.textContent = s.name + (s.isVerified === false ? "" : "");
+        if (t.targetId === s.id) o.selected = true; objSel.appendChild(o);
+      });
+      objSel.addEventListener("change", function () { t.targetId = objSel.value; recompute(); });
+
+      var qty = document.createElement("input");
+      qty.type = "number"; qty.min = "1"; qty.value = t.qty; qty.className = "qty";
+      qty.setAttribute("aria-label", "数量");
+      qty.addEventListener("input", function () { t.qty = Math.max(1, parseInt(qty.value, 10) || 1); recompute(); });
+
+      var del = document.createElement("button");
+      del.className = "del-btn"; del.type = "button"; del.textContent = "×"; del.setAttribute("aria-label", "この対象を削除");
+      del.addEventListener("click", function () { state.targets.splice(i, 1); if (!state.targets.length) addTarget(); renderTargets(); recompute(); });
+
+      row.appendChild(catSel); row.appendChild(objSel); row.appendChild(qty); row.appendChild(del);
+      wrap.appendChild(row);
+    });
+  }
+
+  // 1対象・1武器のコストを計算。未登録なら {missing:true}
+  function calcOne(targetId, weaponId, qty) {
+    var cost = getCost(targetId, weaponId);
+    var exp = byExp[weaponId];
+    if (!cost || !exp) return { missing: true };
+    var units = cost.requiredAmount * qty;
+    function mul(v) { return (v == null) ? null : v * units; }
+    return {
+      missing: false,
+      units: units,
+      sulfur: mul(exp.sulfurCost),
+      gunpowder: mul(exp.gunpowderCost),
+      metal: mul(exp.metalFragmentsCost),
+      fuel: mul(exp.lowGradeFuelCost),
+      unverified: (cost.isVerified === false) || (exp.isVerified === false),
+      lastVerified: cost.lastVerified
+    };
+  }
+
+  function recompute() {
+    var exp = byExp[state.weapon];
+    var lines = [];
+    var tot = { units: 0, sulfur: 0, gunpowder: 0, metal: 0, fuel: 0 };
+    var anyUnv = false, anyMissing = false, anyData = false;
+
+    state.targets.forEach(function (t) {
+      if (!t.targetId) return;
+      var s = byStruct[t.targetId];
+      var r = calcOne(t.targetId, state.weapon, t.qty);
+      lines.push({ struct: s, qty: t.qty, r: r });
+      if (r.missing) { anyMissing = true; return; }
+      anyData = true;
+      tot.units += r.units;
+      tot.sulfur += r.sulfur || 0;
+      tot.gunpowder += r.gunpowder || 0;
+      tot.metal += r.metal || 0;
+      tot.fuel += r.fuel || 0;
+      if (r.unverified) anyUnv = true;
+    });
+
+    renderResult(exp, lines, tot, anyUnv, anyMissing, anyData);
+    renderComparison();
+  }
+
+  function renderResult(exp, lines, tot, anyUnv, anyMissing, anyData) {
+    var el = document.getElementById("result");
+    var badge = document.getElementById("result-badge");
+    badge.innerHTML = anyUnv ? '<span class="badge-unv">未確認データ</span>' : (anyData ? '' : '');
+
+    if (!anyData) {
+      el.innerHTML = '<div class="empty">' + (anyMissing ? "選んだ組み合わせは<b>データ未登録</b>です（別の攻撃手段を選ぶか、JSONに追加してください）。" : "対象を選んでください。") + '</div>';
+      return;
+    }
+    var expName = exp ? esc(exp.name) : "?";
+    var h = '<div class="result-grid">';
+    h += stat("必要 " + expName, fmt(tot.units) + '<small> 個</small>', true);
+    h += stat("必要硫黄", fmt(tot.sulfur));
+    h += stat("必要火薬", tot.gunpowder ? fmt(tot.gunpowder) : "—");
+    h += stat("金属片", tot.metal ? fmt(tot.metal) : "—");
+    if (tot.fuel) h += stat("低品質燃料", fmt(tot.fuel));
+    h += '</div>';
+
+    // 対象ごとの内訳
+    h += '<div class="breakdown">';
+    lines.forEach(function (ln) {
+      var name = ln.struct ? esc(ln.struct.name) : "?";
+      if (ln.r.missing) {
+        h += '<div class="bd-row"><span>' + name + ' × ' + ln.qty + ' <span class="badge-unv badge-missing">データ未登録</span></span><span class="r">—</span></div>';
+      } else {
+        h += '<div class="bd-row"><span>' + name + ' × ' + ln.qty + (ln.r.unverified ? ' <span class="badge-unv">未確認</span>' : '') + '</span>'
+          + '<span class="r"><b>' + fmt(ln.r.units) + '</b>個 ・ 硫黄 <b>' + fmt(ln.r.sulfur) + '</b></span></div>';
+      }
+    });
+    h += '</div>';
+    h += '<div class="last-verified">データ最終更新日：' + DATA.updated + (anyMissing ? '　／　一部データ未登録あり' : '') + '</div>';
+    el.innerHTML = h;
+  }
+
+  function stat(lbl, val, hero) {
+    return '<div class="stat' + (hero ? ' hero' : '') + '"><div class="lbl">' + esc(lbl) + '</div><div class="val">' + val + '</div></div>';
+  }
+
+  // 同じ対象セットを攻撃手段ごとに比較
+  function renderComparison() {
+    var el = document.getElementById("comparison");
+    var actives = state.targets.filter(function (t) { return t.targetId; });
+    if (!actives.length) { el.innerHTML = '<div class="empty">対象を選ぶと比較を表示します。</div>'; return; }
+
+    var rows = COMPARE_WEAPONS.map(function (wid) {
+      var exp = byExp[wid]; if (!exp) return null;
+      var units = 0, sulfur = 0, missing = false, unv = false, hasData = false;
+      actives.forEach(function (t) {
+        var r = calcOne(t.targetId, wid, t.qty);
+        if (r.missing) { missing = true; return; }
+        hasData = true; units += r.units; sulfur += r.sulfur || 0; if (r.unverified) unv = true;
+      });
+      return { wid: wid, name: exp.name, units: units, sulfur: sulfur, missing: missing, unv: unv, hasData: hasData };
+    }).filter(Boolean);
+
+    var withData = rows.filter(function (r) { return r.hasData; });
+    var bestSulfur = withData.length ? Math.min.apply(null, withData.map(function (r) { return r.sulfur; })) : null;
+
+    var h = '<table class="cmp-table"><thead><tr><th>攻撃手段</th><th>必要数</th><th>合計硫黄</th><th>備考</th></tr></thead><tbody>';
+    rows.forEach(function (r) {
+      var best = (r.hasData && r.sulfur === bestSulfur);
+      h += '<tr class="' + (best ? "best" : "") + '">';
+      h += '<td>' + esc(r.name) + (r.wid === state.weapon ? ' ◀' : '') + '</td>';
+      if (!r.hasData) {
+        h += '<td colspan="2">' + (r.missing ? "一部/全部 未登録" : "—") + '</td><td class="cmp-note">データ未登録</td>';
+      } else {
+        h += '<td>' + fmt(r.units) + '</td><td>' + fmt(r.sulfur) + '</td>';
+        h += '<td class="cmp-note">' + (best ? "最安" : "") + (r.unv ? (best ? " ・未確認" : "未確認") : "") + (r.missing ? " ・一部未登録" : "") + '</td>';
+      }
+      h += '</tr>';
+    });
+    h += '</tbody></table>';
+    el.innerHTML = h;
+  }
+
+  function buildCopyText(exp, lines, tot, anyUnv, anyMissing) {
+    var out = [];
+    out.push("# Rust Raid Calculator");
+    out.push("");
+    out.push("対象：");
+    lines.forEach(function (ln) {
+      var name = ln.struct ? ln.struct.name : "?";
+      out.push("・" + name + " × " + ln.qty + (ln.r && ln.r.missing ? "（データ未登録）" : ""));
+    });
+    out.push("");
+    out.push("使用：");
+    out.push("・" + (exp ? exp.name : "?"));
+    out.push("");
+    out.push("必要素材：");
+    out.push("・" + (exp ? exp.name : "?") + "：" + fmt(tot.units) + "個");
+    out.push("・硫黄：" + fmt(tot.sulfur));
+    out.push("・火薬：" + (tot.gunpowder ? fmt(tot.gunpowder) : "—"));
+    out.push("・金属片：" + (tot.metal ? fmt(tot.metal) : "—"));
+    if (tot.fuel) out.push("・低品質燃料：" + fmt(tot.fuel));
+    out.push("");
+    out.push("データ最終更新日：");
+    out.push(DATA.updated);
+    out.push("");
+    out.push("未確認データ：");
+    out.push((anyUnv || anyMissing) ? "あり" : "なし");
+    out.push("");
+    out.push("注意：");
+    out.push("数値はデータファイルに基づく計算です。");
+    out.push("アップデートにより変わる可能性があります。");
+    return out.join("\n");
+  }
+})();
+</script>
+</body>
+</html>

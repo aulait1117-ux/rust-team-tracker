@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>敵チーム監視 - Rustチーム管理ツール</title>
-<link rel="icon" type="image/svg+xml" href="favicon.svg?v=2" />
-<link rel="alternate icon" href="favicon.ico?v=2" />
+<title>RAIDAR｜Rust敵チーム偵察</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="alternate icon" href="favicon.ico" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Shippori+Mincho:wght@500;600;700&display=swap" rel="stylesheet">
@@ -173,19 +173,25 @@
   }
   .room-modal-backdrop[hidden] { display: none; }
   .room-modal {
-    background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 24px;
-    max-width: 440px; width: 100%;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 26px 28px;
+    max-width: 560px; width: 100%; font-size: 15px; max-height: 92vh; overflow-y: auto;
   }
   .room-modal h2 {
-    margin: 0 0 10px; font-family: var(--font-display); font-size: 16px; font-weight: 700;
+    margin: 0 0 12px; font-family: var(--font-display); font-size: 22px; font-weight: 700;
     text-transform: uppercase; letter-spacing: 0.04em; color: var(--text);
   }
-  .room-modal p { margin: 0 0 16px; font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+  .room-modal p { margin: 0 0 18px; font-size: 14px; color: var(--text-muted); line-height: 1.65; }
   .room-modal-row { display: flex; gap: 8px; margin-bottom: 10px; }
   .room-modal-row input[type="text"] {
     flex: 1; background: var(--surface-raised); border: 1px solid var(--line); color: var(--text);
-    font-size: 13px; padding: 8px 10px; border-radius: 3px; text-transform: uppercase; font-family: var(--font-mono);
+    font-size: 15px; padding: 10px 12px; border-radius: 3px; text-transform: uppercase; font-family: var(--font-mono);
   }
+  .season-box { margin: 16px 0 6px; padding: 14px 16px; border: 1px solid var(--amber); border-radius: 5px; background: rgba(214,171,87,0.06); }
+  .season-line { font-size: 17px; color: var(--text); margin-bottom: 10px; }
+  .season-line b { font-family: var(--font-serif); font-size: 24px; color: var(--amber); font-weight: 600; }
+  .season-box .btn-ghost { border-color: var(--amber); color: var(--amber); font-size: 14px; padding: 9px 14px; }
+  .season-box .btn-ghost:hover { background: rgba(214,171,87,0.12); color: var(--text); }
+  .season-note { font-size: 12px; color: var(--text-faint); margin-top: 8px; line-height: 1.55; }
   .room-modal-row button { white-space: nowrap; }
   .room-modal-divider { text-align: center; font-size: 11px; color: var(--text-faint); margin: 12px 0; }
 
@@ -228,7 +234,7 @@
   .trend-modal-backdrop[hidden] { display: none; }
   .trend-modal {
     background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 22px 24px;
-    max-width: 560px; width: 100%;
+    max-width: 560px; width: 100%; max-height: 94vh; overflow-y: auto;
   }
   .trend-modal-head {
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -247,6 +253,121 @@
     margin-top: 12px; font-size: 12px; color: var(--text-faint); line-height: 1.5;
   }
   .trend-note[hidden] { display: none; }
+  .trend-heat { margin: 4px 0 6px; }
+  .th-strip { display: grid; grid-template-columns: repeat(24, 1fr); gap: 3px; }
+  .th-cell { min-height: 40px; border: 1px solid var(--line-soft); border-radius: 3px; display: flex; align-items: center; justify-content: center; }
+  .th-cell.has { border-color: transparent; }
+  .th-count { font-family: var(--font-mono); font-size: 10px; font-weight: 700; color: var(--ink); }
+  .th-labels { display: grid; grid-template-columns: repeat(24, 1fr); margin-top: 5px; }
+  .th-labels span { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-muted); white-space: nowrap; }
+  .th-summary { margin-top: 14px; font-size: 12.5px; color: var(--text-muted); text-align: center; letter-spacing: 0.02em; }
+  .th-summary b {
+    color: var(--moss); font-family: var(--font-body); font-size: 17px; font-weight: 700;
+    letter-spacing: 0.03em; border-bottom: 2px solid var(--moss); padding-bottom: 1px; margin: 0 3px;
+  }
+  .status-box { line-height: 1.5; margin-bottom: 16px; }
+  .st-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .st-lv { display: flex; align-items: baseline; gap: 10px; }
+  .st-lv-num { font-family: var(--font-serif); font-size: 30px; font-weight: 600; color: var(--rust-bright); }
+  .st-title { font-family: var(--font-display); font-size: 18px; color: var(--text); }
+  .st-total { font-size: 12.5px; color: var(--text-muted); font-family: var(--font-mono); }
+  .st-total b { color: var(--text); }
+  .st-bar { height: 8px; background: var(--surface-raised); border: 1px solid var(--line); border-radius: 5px; overflow: hidden; margin: 10px 0 4px; }
+  .st-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--moss)); border-radius: 5px; transition: width .4s ease; }
+  .st-bar-label { font-size: 11px; color: var(--text-faint); font-family: var(--font-mono); }
+  .st-stats { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 12px; }
+  .st-stat { display: flex; flex-direction: column; gap: 2px; }
+  .st-stat-lbl { font-size: 11px; color: var(--text-muted); }
+  .st-stat-val { font-size: 15px; color: var(--text); font-weight: 600; }
+  .st-section-title { font-size: 12px; color: var(--text-muted); margin: 8px 0 8px; font-family: var(--font-display); }
+  .fm-lv { flex: none; font-family: var(--font-mono); font-size: 10.5px; color: var(--amber); border: 1px solid var(--amber); border-radius: 3px; padding: 1px 6px; }
+  .fm-title { flex: none; font-size: 11px; color: var(--rust-bright); font-family: var(--font-display); white-space: nowrap; }
+  .rarity-badge { flex: none; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.04em; border: 1px solid var(--line); border-radius: 3px; padding: 2px 9px; }
+  .st-exp { font-family: var(--font-mono); color: var(--text-faint); }
+  .owned-titles { margin-top: 6px; }
+  .title-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .title-chip {
+    font-family: var(--font-mono); font-size: 10.5px; border: 1px solid var(--line); border-radius: 3px;
+    padding: 3px 8px; opacity: 0.82; white-space: nowrap;
+  }
+  .title-chip.current { opacity: 1; font-weight: 700; box-shadow: 0 0 0 1px currentColor inset; }
+  .ach-section { margin-top: 6px; }
+  .ach-list { display: flex; flex-direction: column; gap: 2px; }
+  .ach-row { display: grid; grid-template-columns: 84px 1fr; gap: 10px; align-items: center; padding: 6px 2px; border-bottom: 1px solid var(--line-soft); }
+  .ach-row:last-child { border-bottom: none; }
+  .ach-cat { font-size: 12px; color: var(--text-muted); }
+  .ach-body { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .ach-earned-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ach-chip { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--line); border-radius: 3px; padding: 3px 9px; font-weight: 700; }
+  .ach-none { font-size: 11px; color: var(--text-faint); }
+  .ach-next { font-size: 10.5px; color: var(--text-faint); font-family: var(--font-mono); }
+  .farm-rec-btn {
+    flex: none; background: transparent; border: 1px solid var(--moss); color: var(--moss);
+    font-size: 10.5px; padding: 3px 8px; border-radius: 3px; cursor: pointer; white-space: nowrap;
+  }
+  .farm-rec-btn:hover { background: rgba(143,185,110,0.12); }
+  /* ---------- farm records ---------- */
+  .farm-section { margin: 6px 0 4px; padding-top: 10px; border-top: 1px solid var(--line-soft); }
+  .farm-log-list { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+  .farm-log {
+    display: flex; align-items: center; gap: 10px; padding: 8px; border: 1px solid var(--line-soft);
+    border-radius: 5px; background: var(--surface-raised);
+  }
+  .farm-log.is-verified { border-color: var(--moss); }
+  .farm-log-thumb { width: 52px; height: 52px; object-fit: cover; border-radius: 4px; cursor: pointer; flex: none; border: 1px solid var(--line); }
+  .farm-log-noimg { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 4px; flex: none; border: 1px dashed var(--line); color: var(--text-faint); font-size: 9.5px; text-align: center; }
+  .farm-log-mid { flex: 1; min-width: 0; }
+  .farm-log-amt { font-family: var(--font-serif); font-size: 18px; font-weight: 600; color: var(--text); }
+  .farm-log-exp { font-family: var(--font-mono); font-size: 11px; color: var(--moss); }
+  .farm-log-meta { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+  .farm-log-actions { display: flex; align-items: center; gap: 6px; flex: none; }
+  .farm-verify-btn {
+    background: transparent; border: 1px solid var(--line); color: var(--text-faint);
+    font-size: 10.5px; padding: 3px 8px; border-radius: 3px; cursor: pointer; white-space: nowrap;
+  }
+  .farm-verify-btn:hover { color: var(--moss); border-color: var(--moss); }
+  .farm-verify-btn.on { color: var(--ink); background: var(--moss); border-color: var(--moss); }
+  /* ---------- farm record modal ---------- */
+  .farm-modal-body { padding: 4px 2px 2px; }
+  .farm-field-lbl { display: block; font-size: 11.5px; color: var(--text-muted); margin: 8px 0 3px; }
+  .farm-input {
+    width: 100%; background: var(--surface-raised); border: 1px solid var(--line); color: var(--text);
+    font-size: 14px; padding: 8px 10px; border-radius: 4px; font-family: var(--font-body);
+  }
+  .farm-input::placeholder { color: var(--text-faint); }
+  .farm-exp-hint { font-family: var(--font-mono); font-size: 12px; color: var(--moss); margin-top: 8px; padding: 6px 10px; border: 1px solid var(--line-soft); border-radius: 4px; background: rgba(143,185,110,0.05); }
+  .farm-ocr-status { font-size: 11.5px; color: var(--text-muted); margin-top: 6px; }
+  .farm-ocr-status.ok { color: var(--moss); }
+  .farm-ocr-status.warn { color: var(--amber); }
+  .add-exp-note { margin-top: 8px; font-size: 12px; color: var(--moss); background: rgba(143,185,110,0.06); border: 1px solid var(--line-soft); border-radius: 4px; padding: 8px 12px; }
+  #farm-modal-backdrop .trend-modal { max-width: min(1180px, 96vw); padding: 16px 20px; }
+  #farm-modal-backdrop .trend-modal-head { margin-bottom: 8px; padding-bottom: 8px; }
+  .farm-res-wrap { margin-top: 2px; }
+  .farm-res-group { grid-column: 1 / -1; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--rust); margin: 6px 0 2px; border-bottom: 1px solid var(--line-soft); padding-bottom: 2px; }
+  .farm-res-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px 14px; margin-top: 2px; }
+  .farm-res-cell { display: flex; align-items: center; gap: 8px; }
+  .farm-res-name { flex: 1; min-width: 0; font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .farm-res-input {
+    flex: 0 0 62px; width: 62px; background: var(--surface-raised); border: 1px solid var(--line); color: var(--text);
+    font-size: 12.5px; padding: 5px 6px; border-radius: 3px; font-family: var(--font-mono); text-align: right;
+  }
+  .farm-res-input::placeholder { color: var(--text-faint); }
+  .farm-res-input[readonly] { cursor: default; opacity: 0.95; }
+  @media (max-width: 1000px) { .farm-res-grid { grid-template-columns: repeat(4, 1fr); } }
+  @media (max-width: 820px) { .farm-res-grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 620px) { .farm-res-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 420px) { .farm-res-grid { grid-template-columns: 1fr; } }
+  .farm-file { display: block; margin-top: 4px; color: var(--text-muted); font-size: 12px; }
+  .farm-file-note { font-size: 11px; color: var(--text-faint); margin-top: 4px; }
+  .farm-preview { display: block; max-width: 220px; max-height: 130px; margin-top: 8px; border-radius: 5px; border: 1px solid var(--line); }
+  .farm-preview[hidden] { display: none; }
+  .btn-primary {
+    display: inline-block; background: var(--moss); border: 1px solid var(--moss); color: var(--ink);
+    font-size: 13px; font-weight: 600; padding: 9px 16px; border-radius: 4px; cursor: pointer;
+    margin-top: 16px; font-family: var(--font-body);
+  }
+  .btn-primary:hover { background: var(--rust-bright); border-color: var(--rust-bright); }
+  .btn-primary.btn-sm { font-size: 11px; padding: 5px 11px; margin-top: 0; }
   .trend-tooltip {
     position: fixed; z-index: 140; pointer-events: none;
     background: var(--surface-raised); border: 1px solid var(--line); border-radius: 4px;
@@ -292,9 +413,59 @@
   .server-live b { color: var(--text); font-variant-numeric: tabular-nums; }
   .friend-section { margin: 16px 0 12px; }
   .friend-head { font-size: 15px; color: var(--moss); margin: 0 0 8px; letter-spacing: 0.02em; }
-  .team-card.friend-compact { padding: 10px 12px; }
-  .team-card.friend-compact .team-card-top { margin-bottom: 0; }
-  .team-card.friend-compact input[type="text"] { flex: 1 1 auto; }
+  #friend-cards { grid-template-columns: 1fr; }
+  .team-card.friend-card { padding: 12px 15px; }
+  .team-card.friend-card .team-card-top { margin-bottom: 8px; }
+  .team-card.friend-card .team-card-top input[type="text"] { flex: 1 1 160px; }
+  .friend-members { border-top: 1px solid var(--line-soft); }
+  .friend-member-row { display: flex; align-items: center; gap: 10px; padding: 7px 2px; border-bottom: 1px solid var(--line-soft); flex-wrap: wrap; }
+  .friend-member-row:last-child { border-bottom: none; }
+  .friend-member-row .fm-name { font-weight: 600; min-width: 110px; }
+  .friend-member-row .last-seen { color: var(--text-muted); font-family: var(--font-mono); font-size: 11.5px; }
+  .friend-member-row .trend-btn { margin-left: auto; }
+  .friend-add-row { display: flex; gap: 8px; margin-top: 10px; }
+  .friend-add-row input[type="text"] { flex: 1; background: var(--surface); border: 1px solid var(--line); color: var(--text); font-size: 13px; padding: 8px 10px; border-radius: 3px; }
+  .friend-add-row input[type="text"]::placeholder { color: var(--text-faint); }
+  .enemy-alert { margin: 10px 0 2px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .enemy-alert[hidden] { display: none; }
+  .enemy-alert .ea-label { font-family: var(--font-mono); font-size: 12.5px; color: var(--alert); }
+  .enemy-alert .ea-chip { background: rgba(224,112,90,.1); border: 1px solid var(--alert); color: var(--alert); border-radius: 4px; padding: 5px 11px; font-size: 12.5px; cursor: pointer; font-family: var(--font-body); }
+  .enemy-alert .ea-chip:hover { background: rgba(224,112,90,.2); }
+  .team-card.flash { animation: cardFlash 1.6s ease; }
+  @keyframes cardFlash { 0%,100%{ border-color: var(--line); } 25%{ border-color: var(--alert); } }
+  .friend-member-row .fm-steamid, .friend-add-row .fm-steamid { flex: 0 1 210px; background: var(--surface-raised); border: 1px solid var(--line); color: var(--text); font-size: 12px; padding: 6px 8px; border-radius: 3px; font-family: var(--font-mono); }
+  .friend-member-row .fm-steamid::placeholder, .friend-add-row .fm-steamid::placeholder { color: var(--text-faint); }
+  .fm-name.is-online { color: var(--moss); text-shadow: 0 0 9px rgba(143,185,110,.55); }
+  .fm-name.is-offline { color: var(--text-faint); text-shadow: none; }
+  .fm-rename-btn {
+    flex: none; background: transparent; border: 1px solid transparent; color: var(--text-faint);
+    font-size: 11px; padding: 2px 5px; border-radius: 3px; cursor: pointer; line-height: 1;
+  }
+  .fm-rename-btn:hover { color: var(--rust-bright); border-color: var(--line); }
+  .page-head h1.brand-title {
+    position: relative; display: inline-block; font-size: clamp(46px, 11vw, 80px);
+    letter-spacing: 0.16em; font-weight: 700; line-height: 1.02;
+    background: linear-gradient(100deg, #d8cba0 0%, #d8cba0 38%, #fff3c8 47%, #ffd479 50%, #fff3c8 53%, #d8cba0 62%, #d8cba0 100%);
+    background-size: 260% 100%; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;
+    text-shadow: 0 0 18px rgba(255,212,121,0.25);
+    animation: brandSheen 4s ease-in-out 0.6s infinite, crtFlicker 5.5s steps(1) infinite, crtGlitch 7s steps(1) infinite;
+  }
+  /* 走査線オーバーレイ（CRTブラウン管風） */
+  .page-head h1.brand-title::after {
+    content: ""; position: absolute; left: -6px; right: -6px; top: -6px; bottom: -6px; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,0.34) 0 1px, transparent 1px 3px);
+    mix-blend-mode: overlay; opacity: 0.55; animation: crtScan 7s linear infinite;
+  }
+  @keyframes brandSheen { 0% { background-position: 150% 0; } 55%,100% { background-position: -50% 0; } }
+  @keyframes crtScan { from { background-position: 0 0; } to { background-position: 0 6px; } }
+  @keyframes crtFlicker { 0%,100%{opacity:1} 3%{opacity:.68} 4%{opacity:.98} 30%{opacity:.85} 32%{opacity:1} 57%{opacity:.78} 59%{opacity:.96} 91%{opacity:.66} 93%{opacity:1} }
+  @keyframes crtGlitch {
+    0%, 96%, 100% { transform: translate(0,0); text-shadow: 0 0 18px rgba(255,212,121,0.25); }
+    96.5% { transform: translate(-2px,1px); text-shadow: 2px 0 rgba(224,112,90,.7), -2px 0 rgba(111,168,201,.7); }
+    97.5% { transform: translate(3px,-1px); text-shadow: -3px 0 rgba(224,112,90,.7), 3px 0 rgba(111,168,201,.7); }
+    98.5% { transform: translate(-1px,0); text-shadow: 2px 0 rgba(224,112,90,.6), -2px 0 rgba(111,168,201,.6); }
+  }
+  @media (prefers-reduced-motion: reduce) { .brand-title { animation: none; } .team-card.flash { animation: none; } }
   .team-card-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
   .type-toggle {
     flex: none; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.03em;
@@ -311,8 +482,15 @@
   .team-card-top input[type="text"]:hover { border-color: var(--line); }
   .team-card-top input[type="text"]:focus-visible { outline: 2px solid var(--rust-bright); outline-offset: 1px; border-color: transparent; }
 
-  .badge.team-count { color: var(--text-muted); }
-  .badge.team-count.has-online { color: var(--moss); }
+  .badge.team-count { color: var(--text-muted); font-weight: 600; letter-spacing: 0.08em; padding: 3px 9px; }
+  .badge.team-count.has-online { color: var(--moss); border-color: var(--moss); background: rgba(143,185,110,.1); animation: inPulse 2s ease-in-out infinite; }
+  @keyframes inPulse { 0%,100% { box-shadow: 0 0 7px rgba(143,185,110,.18); } 50% { box-shadow: 0 0 15px rgba(143,185,110,.5); } }
+  .fm-name-link { cursor: pointer; }
+  .fm-name-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .friend-member-row .last-seen.is-in { color: var(--moss); font-weight: 600; }
+  .badge.team-count::before { content: "\25CF"; margin-right: 5px; font-size: 8px; vertical-align: 1px; color: var(--text-faint); }
+  .badge.team-count.has-online::before { color: var(--moss); }
+  @media (prefers-reduced-motion: reduce) { .badge.team-count.has-online { animation: none; } }
 
   .reorder-btn {
     flex: none; width: 22px; height: 22px; display: grid; place-items: center; background: transparent;
@@ -366,7 +544,7 @@
   }
   .suggest-item {
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    padding: 7px 10px; font-size: 13px; color: var(--text); cursor: pointer;
+    padding: 9px 12px; font-size: 14.5px; color: var(--text); cursor: pointer;
   }
   .suggest-item:hover, .suggest-item.active { background: rgba(226, 121, 63, 0.14); }
   .suggest-item .suggest-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -376,8 +554,10 @@
   }
   .suggest-empty { padding: 8px 10px; font-size: 12px; color: var(--text-faint); }
   .server-suggest-box {
-    position: static; margin: 4px 0 0; max-height: 260px;
+    position: static; margin: 4px 0 0; max-height: min(52vh, 520px);
   }
+  .server-suggest-box.collapsed { display: none; }
+  .server-list-toggle { margin: 4px 0 0; font-size: 13px; }
   .suggest-item .suggest-region {
     flex: none; font-family: var(--font-mono); font-size: 10px; color: var(--text-faint);
   }
@@ -523,10 +703,10 @@
   #kg-gate.charging{ cursor:default; }
   #kg-gate.charging .g-charge{ animation:kgChargeUp 1.2s ease-in forwards; }
   #kg-gate.charging .g-orbit{ animation-duration:1s !important; }
-  #kg-gate.charging .g-seal{ animation:kgSealIn 1ms linear forwards, kgChargeSeal 2.0s ease forwards !important; }
-  #kg-gate.charging .g-title{ animation:kgClip 1.6s cubic-bezier(.72,0,.24,1) forwards; filter:brightness(1.12); }
-  #kg-gate.charging .g-line{ animation:kgLine 1.1s ease 1.5s forwards; }
-  #kg-gate.charging .g-sub{ animation:kgUp 1.0s ease 1.7s forwards; }
+  #kg-gate.charging .g-seal{ animation:kgSealIn 1ms linear forwards, kgChargeSeal 4.0s ease forwards !important; }
+  #kg-gate.charging .g-title{ animation:kgClip 3.6s cubic-bezier(.72,0,.24,1) forwards; filter:brightness(1.12); }
+  #kg-gate.charging .g-line{ animation:kgLine 1.1s ease 3.5s forwards; }
+  #kg-gate.charging .g-sub{ animation:kgUp 1.0s ease 3.7s forwards; }
   #kg-gate.charging .g-hint{ opacity:0 !important; animation:none !important; }
   #kg-gate.charging .g-title::after{ content:""; position:absolute; inset:-4px -2px; pointer-events:none;
     background:linear-gradient(90deg, transparent 0%, rgba(255,250,235,.6) 50%, transparent 100%);
@@ -535,9 +715,9 @@
   @keyframes kgChargeUp{ 0%{opacity:0; transform:scale(.6)} 100%{opacity:.95; transform:scale(1.28)} }
   @keyframes kgChargeSeal{ 0%{box-shadow:0 0 28px 3px rgba(143,176,160,.12)} 70%{transform:scale(.95)} 100%{box-shadow:0 0 78px 20px rgba(143,176,160,.6); transform:scale(1.07)} }
   #kg-gate.reveal .g-charge{ opacity:0 !important; transition:opacity .25s; }
-  #kg-gate.reveal .g-burst{ animation:kgBurst 1.5s cubic-bezier(.22,.61,.36,1) forwards; }
+  #kg-gate.reveal .g-burst{ animation:kgBurst 2.6s cubic-bezier(.22,.61,.36,1) forwards; }
   @keyframes kgBurst{ 0%{opacity:.95; transform:scale(0)} 55%{opacity:.5} 100%{opacity:0; transform:scale(52)} }
-  #kg-gate.reveal{ animation:kgReveal 1.55s cubic-bezier(.22,.61,.36,1) forwards; }
+  #kg-gate.reveal{ animation:kgReveal 2.6s cubic-bezier(.22,.61,.36,1) forwards; }
   @keyframes kgReveal{ 0%{opacity:1; transform:scale(1); filter:blur(0)} 100%{opacity:0; transform:scale(1.1); filter:blur(7px); visibility:hidden} }
   @media (prefers-reduced-motion:reduce){
     #kg-gate .g-seal,#kg-gate .g-title,#kg-gate .g-line,#kg-gate .g-sub{ animation-duration:1ms !important; animation-delay:0s !important; animation-iteration-count:1 !important; }
@@ -551,10 +731,10 @@
 <body>
 <div id="kg-gate" aria-hidden="true">
   <div class="g-eyebrow">企業道</div>
-  <span class="g-emblem"><span class="g-charge" aria-hidden="true"></span><span class="g-orbit" aria-hidden="true"></span><span class="g-seal">監</span><span class="g-burst" aria-hidden="true"></span></span>
-  <div class="g-title">監視</div>
+  <span class="g-emblem"><span class="g-charge" aria-hidden="true"></span><span class="g-orbit" aria-hidden="true"></span><span class="g-seal">襲</span><span class="g-burst" aria-hidden="true"></span></span>
+  <div class="g-title">RAIDAR</div>
   <div class="g-line"></div>
-  <div class="g-sub">Kanshi — Rust Team Watch</div>
+  <div class="g-sub">Raid Radar — 敵チーム偵察</div>
   <div class="g-ara" aria-hidden="true" title="Ara. — by Arakawa">Ara<i>.</i></div>
   <div class="g-hint">クリックで入室</div>
 </div>
@@ -565,7 +745,7 @@
   try{ if(sessionStorage.getItem('kgGateShown')){ g.style.display='none'; return; } sessionStorage.setItem('kgGateShown','1'); }catch(e){}
   var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion:reduce)').matches;
   var done=false, autoT;
-  var CHARGE=2100, REVEAL=1550;   // 題字を筆で描く→光が弾けて開く（音と同期・ゆっくりめ）
+  var CHARGE=4100, REVEAL=2600;   // 題字を筆で描く→光が弾けて開く（社長指定で開く演出含め+2秒ゆっくり）
   function dismiss(withSound){
     if(done) return; done=true;
     clearTimeout(autoT);
@@ -665,10 +845,12 @@
   <header class="page-head">
     <div class="page-head-title">
       <span class="eyebrow" id="server-eyebrow">Rustoria.co · US Main</span>
-      <h1>敵チーム監視</h1>
+      <h1 class="brand-title">RAIDAR</h1>
       <div class="server-live" id="server-live-info">サーバー情報を取得中…</div>
     </div>
     <div class="hero-actions">
+      <a class="btn-ghost" href="raid-calculator.html">🧮 レイド計算</a>
+      <a class="btn-ghost" href="ranking.html">🏆 ランキング</a>
       <button class="btn-ghost" id="server-switch-btn" type="button">🔄 サーバーを変更</button>
       <button class="btn-ghost" id="help-btn" type="button">❓ 使い方</button>
     </div>
@@ -697,30 +879,24 @@
     </div>
   </div>
 
+  <div class="enemy-alert" id="enemy-alert" hidden></div>
+
   <section class="teams-section" aria-labelledby="teams-head">
     <div class="teams-topbar">
       <h2 id="teams-head">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
           <circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/>
         </svg>
-        敵チーム監視
+        敵チーム
       </h2>
       <div class="hero-meta">
         <span>登録：<b id="teams-count">0</b> チーム</span>
         <span>最終確認：<b id="teams-last-checked">--:--:--</b></span>
+        <span>シーズン：<b id="season-num">1</b></span>
       </div>
       <div class="hero-actions">
         <button class="btn-ghost" id="teams-refresh-btn" type="button">🔄 今すぐ確認</button>
       </div>
-    </div>
-    <div class="share-bar">
-      <button class="btn-ghost" id="share-link-btn" type="button">📤 共有用リンクを作成</button>
-      <button class="btn-ghost" id="share-text-btn" type="button">📋 テキストで共有</button>
-      <button class="btn-ghost" id="share-import-toggle-btn" type="button">📥 テキストから読み込む</button>
-    </div>
-    <div class="share-import-box" id="share-import-box" hidden>
-      <textarea id="share-import-textarea" rows="3" placeholder="共有されたテキスト(JSON)をここに貼り付け…"></textarea>
-      <button class="btn-ghost" id="share-import-btn" type="button">読み込んでマージ</button>
     </div>
     <div class="add-row">
       <input type="text" id="team-add-input" placeholder="例：北の岩山グループ" />
@@ -730,6 +906,7 @@
       </select>
       <button id="team-add-btn" type="button">＋ チーム追加</button>
     </div>
+    <div class="add-exp-note">🏆 敵チームを登録すると実績称号「偵察開始／監視員…」＆EXPがもらえる。拠点スクショを貼るとさらに実績＆EXP！</div>
     <div class="teams-grid" id="teams-cards"></div>
   </section>
 
@@ -768,7 +945,7 @@
 
 <div class="room-modal-backdrop" id="server-modal-backdrop" hidden>
   <div class="room-modal">
-    <h2>監視サーバーを変更</h2>
+    <h2>サーバーを変更</h2>
     <p>
       BattleMetrics上のRustサーバーを名前で検索して選べる。既定は「Rustoria.co」で検索している
       （Rustoria.coは約26サーバー運営しているので、地域・種別で絞り込みたい場合は例えば
@@ -778,7 +955,12 @@
       <input type="text" id="server-search-input" placeholder="サーバー名で検索…" value="Rustoria.co" />
       <button class="btn-ghost" id="server-search-btn" type="button">検索</button>
     </div>
-    <div class="suggest-box server-suggest-box" id="server-suggest-box"></div>
+    <button class="btn-ghost server-list-toggle" id="server-list-toggle" type="button">▸ サーバー一覧を表示</button>
+    <div class="suggest-box server-suggest-box collapsed" id="server-suggest-box"></div>
+    <div class="season-box">
+      <div class="season-line">シーズン <b id="season-num-modal">1</b></div>
+      <div class="season-note">ワイプを検出すると自動で新シーズンに切り替わり、今の成績はアーカイブ保存される（過去シーズンはランキングの「ファーム」タブで見られる）。手動リセットは無し。</div>
+    </div>
     <div class="room-modal-row">
       <button class="btn-ghost" id="server-modal-close-btn" type="button">閉じる</button>
     </div>
@@ -798,6 +980,15 @@
     </div>
     <div class="trend-chart-wrap" id="trend-chart-wrap"></div>
     <div class="trend-note" id="trend-note" hidden></div>
+  </div>
+</div>
+<div class="trend-modal-backdrop" id="farm-modal-backdrop" hidden>
+  <div class="trend-modal">
+    <div class="trend-modal-head">
+      <h2 id="farm-modal-title">ファームを記録</h2>
+      <button class="btn-ghost" id="farm-modal-close-btn" type="button">✕ 閉じる</button>
+    </div>
+    <div class="farm-modal-body" id="farm-modal-body"></div>
   </div>
 </div>
 <div class="trend-tooltip" id="trend-tooltip" hidden></div>
@@ -826,43 +1017,54 @@
       <section>
         <h3>3. メンバー追加</h3>
         <ul>
-          <li>「名前」欄に2文字以上入力すると名前サジェストが出る。候補をクリックするとBattleMetrics IDが自動で紐付き、相手が改名しても追跡できるようになる。</li>
-          <li>手入力してそのまま「＋ メンバー追加」もできる（この場合IDは未紐付け）。</li>
-          <li><strong>同名が多くて区別できないときは、隣の「Steam ID / プロフィールURL」欄で追加する。</strong>Steam ID（17桁前後の数字）でも、プロフィールのURL（<code>https://steamcommunity.com/profiles/…</code> や <code>…/id/…</code>）を貼り付けてもよい。URLからIDを自動で取り出す。名前を空にしてSteamだけで追加すると、Steamの表示名を仮の名前にする。</li>
-          <li>同じSteam IDは二重登録されない（名前が同じでもSteam IDが違えば別人として追加できる）。</li>
-          <li>「複数名を改行区切りで貼り付け」→「＋ 一括追加」で複数人まとめて登録できる。</li>
-          <li>「部分一致」にチェックを入れると、名前の一部が含まれているだけでオンライン判定される。</li>
-          <li>後から「🔗 ID紐付け」ボタンでも、手入力済みのメンバーにBattleMetrics IDを紐付けられる。</li>
+          <li><strong>敵チーム</strong>：名前欄に2文字以上入力すると候補が出る。候補をクリックするとBattleMetrics IDが紐付き、相手が改名しても追跡できる。手入力＋「＋ メンバー追加」でもOK（IDは未紐付け）。「Steam ID / プロフィールURL」欄でも追加でき、「部分一致」チェックで名前の一部一致でもオンライン判定する。後から「🔗 ID紐付け」も可能。</li>
+          <li><strong>味方チーム</strong>：下の欄に名前かSteam ID/URLのどちらか（両方でも）を入れて「＋ 追加」。<strong>Steam IDだけでも追加できる</strong>。</li>
+          <li><strong>味方の名前をクリックするとSteamプロフィールが開く</strong>（未設定ならその場でID/URLを設定）。名前の横の「✏️」で<strong>ニックネームを変更</strong>できる。</li>
         </ul>
       </section>
       <section>
         <h3>4. オンライン確認</h3>
         <ul>
-          <li>30秒ごとに自動でオンライン状況を更新する。「🔄 今すぐ確認」で手動更新もできる。</li>
-          <li>OFFのメンバーには「最終IN: HH:MM」が表示される。</li>
-          <li>誰かがOFF→ONになった瞬間、トースト通知・通知音（「🔊 通知音：ON/OFF」で切替）・デスクトップ通知（「🔔 デスクトップ通知を有効化」で許可）で知らせる。</li>
+          <li>1分ごとに自動更新（「🔄 今すぐ確認」で手動更新）。上部にサーバー人数・次ワイプまでの残り時間も表示。</li>
+          <li>メンバーは<strong>オンライン優先→レベル順</strong>に自動で並ぶ。名前はIN中は緑に光り、OFFは暗くなる。OFFには「◯分前にOFF」を表示。</li>
+          <li>敵がINすると上部の通知バーに出て、押すとそのチームへジャンプ。トースト／通知音（🔊）／デスクトップ通知（🔔 ON/OFF切替可）でも知らせる。</li>
         </ul>
       </section>
       <section>
-        <h3>5. 拠点写真</h3>
+        <h3>5. 味方のファーム記録＆レベル</h3>
         <ul>
-          <li>各チームカード内の貼り付け欄をクリックして選択し、Ctrl+Vでスクリーンショットをそのまま貼り付けられる（ファイル選択でも追加可）。</li>
-          <li>サムネイルをクリックすると拡大表示、×ボタンで削除できる。</li>
-          <li>貼り付けた写真はルーム接続中、同じルームの全員に共有される（クラウド同期される）。共有したくない画像は貼り付けないこと。</li>
+          <li>味方メンバーの「🌾 記録」→ rustoriaの各タブ（RESOURCES／FARMING／PVP／RAIDING等）のスクショを貼ると、<strong>AIが数値を読み取って自動入力</strong>（手入力不可＝嘘防止）。タブごとに順番に貼れば全項目が合算される。</li>
+          <li>記録するとEXP獲得→<strong>レベルアップ（上限なし）</strong>。資源ごとに単価が違い、キル・レイド・モニュメント等も対象。</li>
+          <li>「📊 ステータス」で、レベル・称号・獲得した<strong>実績称号（レアリティ色つき）</strong>・ファーム記録・ログイン傾向を確認できる。</li>
+          <li>敵はファーム記録できないが、観測したIN時間でレベルが付く（敵は上がりやすめ）。</li>
         </ul>
       </section>
       <section>
-        <h3>6. 友達との共有</h3>
+        <h3>6. ランキング＆称号（🏆）</h3>
         <ul>
-          <li>ルームコードを伝えるのが基本の共有方法。</li>
-          <li>この<code>index.html</code>ファイル自体を友達に送ってもよい。<code>file://</code>で直接開いても、そこでルームコードを入力すればFirebase経由で自動的に同じデータに同期される。</li>
+          <li>上部「🏆 ランキング」ページで、<strong>ランキング（EXP順）／ファーム集計（名前ごとの数値・シーズン切替）／レアリティ表／称号一覧</strong>が見られる。</li>
+          <li>称号一覧のカテゴリは<strong>押すと展開</strong>。レベル称号（200種）と、資源・キル・レイド等で獲得する実績称号がある。</li>
         </ul>
       </section>
       <section>
-        <h3>7. バックアップ</h3>
+        <h3>7. シーズン</h3>
         <ul>
-          <li>「📤 共有用リンクを作成」「📋 テキストで共有」でチーム構成をURL・テキストとしてバックアップ・共有できる（写真は含まれない）。</li>
-          <li>「📥 テキストから読み込む」でその内容を読み込んでマージできる。</li>
+          <li><strong>ワイプを検出すると自動で新シーズンに切り替わり</strong>、それまでの成績はアーカイブ保存される（手動リセットは無し）。</li>
+          <li>過去シーズンの成績はランキングの「ファーム」タブでシーズンを選んで見られる（日付・サーバー名つき）。</li>
+        </ul>
+      </section>
+      <section>
+        <h3>8. レイド計算（🧮）</h3>
+        <ul>
+          <li>上部「🧮 レイド計算」で、対象（壁・ドア等）×攻撃手段（C4・ロケット等）の必要数・素材コストと、爆発物別の比較を計算できる。</li>
+          <li>数値はコミュニティ一般値のため「未確認」表示（アップデートで変わる目安）。</li>
+        </ul>
+      </section>
+      <section>
+        <h3>9. 拠点写真・共有</h3>
+        <ul>
+          <li>敵チームカード内の貼り付け欄にCtrl+Vでスクショを貼れる（ファイル選択でも可）。サムネクリックで拡大、×で削除。</li>
+          <li>チーム構成・メンバー・写真・記録は、同じ<strong>ルームコード</strong>を知る全員にクラウド（Firebase）で共有される。共有したくない画像は貼らないこと。</li>
         </ul>
       </section>
     </div>
@@ -924,14 +1126,115 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
   // 監視中のBattleMetricsサーバー → rustoria.coのサーバースラッグ（ファーム数リンク用の逆引き。
   // ranking.htmlのBM_SERVER_ID_BY_RUSTORIAの逆）。未登録サーバーはrustoria側で手動選択に案内する。
   var RUSTORIA_SERVER_BY_BM = { "6324892": "vanilla_main_us", "16616210": "vanilla_low_pop_us" };
-  // 味方チームの「🌾 ファーム数を見る」＝今見ているサーバーのrustoria.coファームランキングを新タブで開く。
-  function openRustoriaTeamFarm() {
-    var slug = RUSTORIA_SERVER_BY_BM[String(BM_SERVER_ID)];
-    var url = slug ? ("https://rustoria.co/leaderboards?server=" + encodeURIComponent(slug)) : "https://rustoria.co/leaderboards";
-    if (!slug) toast("rustoria.coでサーバーを選んでほしい（この監視サーバーはrustoria未マッピング）");
-    window.open(url, "_blank", "noopener");
+  // 味方チームの「🌾 ファーム数を見る」＝そのクランのrustoria.coクランページ(clans/<名前>)を新タブで開く。
+  // クランURLは初回だけ社長が貼る（例 https://rustoria.co/clans/KABUTOMUSI）→端末に保存し次回から即開く。
+  function rustoriaClanKey(team) { return "kg-rustoria-clan-" + team.id; }
+  function extractClanSlug(input) {
+    var s = String(input || "").trim();
+    var m = s.match(/clans\/([^/?#\s]+)/i);
+    if (m) return m[1];
+    if (s && !/[\s/]/.test(s)) return s;
+    return null;
+  }
+  function openRustoriaTeamFarm(team) {
+    if (!team) return;
+    var key = rustoriaClanKey(team);
+    var slug = null;
+    try { slug = localStorage.getItem(key); } catch (e) { /* ignore */ }
+    if (!slug) {
+      var input = window.prompt(
+        (team.name || "このチーム") + " のrustoriaクランページのURLを1回だけ貼ってください。\n例: https://rustoria.co/clans/KABUTOMUSI"
+      );
+      if (!input) return;
+      slug = extractClanSlug(input);
+      if (!slug) { toast("⚠ URLを読み取れなかった。rustoria.co/clans/… の形で貼ってほしい"); return; }
+      try { localStorage.setItem(key, slug); } catch (e) { /* ignore */ }
+      toast("✓ " + (team.name || "") + " のクランページを登録した（次回からすぐ開く）");
+    }
+    window.open("https://rustoria.co/clans/" + encodeURIComponent(slug), "_blank", "noopener");
   }
   // サーバーの現在人数と次のワイプをBattleMetricsから取得しヘッダーに表示（ゲーム内時間は公開データに無いため非対応）。
+  // ===== ワイプ検出→全ステータスリセット =====
+  // 次ワイプ時刻が大きく先（翌週）へ進んだら「ワイプが起きた」と判定し、全員のIN時間・ファーム記録・サイト稼働を消す。
+  var WIPE_KEY = "raidar-known-next-wipe";
+  var SEASON_KEY = "raidar-season";
+  var SEASON_META_KEY = "raidar-season-meta"; // { "1": { start, end, server }, ... }
+  function getSeason() { try { return parseInt(localStorage.getItem(SEASON_KEY) || "1", 10) || 1; } catch (e) { return 1; } }
+  function setSeason(n) { try { localStorage.setItem(SEASON_KEY, String(n)); } catch (e) { /* ignore */ } }
+  function getSeasonMeta() { try { return JSON.parse(localStorage.getItem(SEASON_META_KEY) || "{}") || {}; } catch (e) { return {}; } }
+  function setSeasonMeta(m) { try { localStorage.setItem(SEASON_META_KEY, JSON.stringify(m)); } catch (e) { /* ignore */ } }
+  // 現在シーズンのメタ（開始日・サーバー）が無ければ作る。ページ初期化時に呼ぶ。
+  function ensureCurrentSeasonMeta() {
+    var m = getSeasonMeta(), s = String(getSeason());
+    if (!m[s] || typeof m[s] !== "object") m[s] = {};
+    if (typeof m[s].start !== "number") m[s].start = Date.now();
+    if (!m[s].server) m[s].server = BM_SERVER_NAME;
+    setSeasonMeta(m);
+  }
+  // シーズンを丸ごと初期化（テストデータ掃除用）。ブラウザのコンソールで raidarResetSeasons() と実行する。
+  // 各メンバーのseasonsアーカイブ・シーズン番号・メタ・ワイプ基準・サイト稼働をリセットし、Firebaseにも同期する。
+  window.raidarResetSeasons = function () {
+    teamsState.teams.forEach(function (t) { (t.members || []).forEach(function (m) { m.seasons = {}; }); });
+    try {
+      localStorage.setItem(SEASON_KEY, "1");
+      localStorage.setItem(SEASON_META_KEY, "{}");
+      localStorage.removeItem(WIPE_KEY);
+      localStorage.setItem(SITE_TIME_KEY, "0");
+    } catch (e) { /* ignore */ }
+    ensureCurrentSeasonMeta();
+    saveTeamsState();
+    if (typeof updateSeasonDisplay === "function") updateSeasonDisplay();
+    if (typeof renderTeamsList === "function") renderTeamsList();
+    toast("🧹 シーズンをリセットした（シーズン1・アーカイブ消去）");
+    return "シーズンをリセットしました（シーズン1）";
+  };
+  // メンバーの現ファーム記録を資源ID→合計に畳む（アーカイブ用・スクショは保存しない＝容量対策）。
+  function memberResourceTotalsMap(member) {
+    var totals = {};
+    memberFarmLogs(member).forEach(function (l) {
+      var r = (l && l.resources) || {};
+      Object.keys(r).forEach(function (k) { totals[k] = (totals[k] || 0) + (Number(r[k]) || 0); });
+    });
+    return totals;
+  }
+  function resetAllStatsForWipe() {
+    var season = getSeason();
+    teamsState.teams.forEach(function (t) {
+      (Array.isArray(t.members) ? t.members : []).forEach(function (m) {
+        if (!m.seasons || typeof m.seasons !== "object") m.seasons = {};
+        // 記録がある人だけアーカイブ（空シーズンは残さない）
+        if (memberFarmLogs(m).length || memberTotalOnlineMs(m) > 0) {
+          m.seasons[String(season)] = { totals: memberResourceTotalsMap(m), playMs: memberTotalOnlineMs(m), records: memberFarmLogs(m).length };
+        }
+        m.sessions = []; m.farmLogs = []; m.online = null; m.lastOnlineAt = null;
+      });
+    });
+    // シーズンのメタ（期間・サーバー）を更新：今のシーズンを締めて、次のシーズンを開始
+    var now = Date.now();
+    var meta = getSeasonMeta();
+    if (!meta[String(season)] || typeof meta[String(season)] !== "object") meta[String(season)] = { start: now };
+    meta[String(season)].end = now;
+    if (!meta[String(season)].server) meta[String(season)].server = BM_SERVER_NAME;
+    meta[String(season + 1)] = { start: now, server: BM_SERVER_NAME };
+    setSeasonMeta(meta);
+    setSeason(season + 1);
+    try { localStorage.setItem(SITE_TIME_KEY, "0"); } catch (e) { /* ignore */ }
+    saveTeamsState();
+    if (typeof renderTeamsList === "function") renderTeamsList();
+    if (typeof updateSeasonDisplay === "function") updateSeasonDisplay();
+    toast("🧹 シーズン" + season + "を保存し、シーズン" + (season + 1) + "開始（ステータスをリセット）");
+  }
+  function checkWipeReset(nextWipeMs) {
+    if (!nextWipeMs || isNaN(nextWipeMs)) return;
+    var known = 0;
+    try { known = parseInt(localStorage.getItem(WIPE_KEY) || "0", 10) || 0; } catch (e) { /* ignore */ }
+    if (!known) { try { localStorage.setItem(WIPE_KEY, String(nextWipeMs)); } catch (e) { /* ignore */ } return; }
+    if (nextWipeMs > known + 3600000) { // 次ワイプが1時間以上先へジャンプ＝ワイプ後に翌週へ更新された
+      resetAllStatsForWipe();
+      try { localStorage.setItem(WIPE_KEY, String(nextWipeMs)); } catch (e) { /* ignore */ }
+    }
+  }
+
   function fetchServerInfo() {
     var el = document.getElementById("server-live-info");
     if (!el) return;
@@ -946,10 +1249,13 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       if (nw) {
         var d = new Date(nw);
         if (!isNaN(d.getTime())) {
-          var days = Math.ceil((d.getTime() - Date.now()) / 86400000);
+          checkWipeReset(d.getTime()); // 次ワイプ時刻が翌週へ進んだらワイプ検出→自動でシーズン切替
+          var diffMin = Math.max(0, Math.floor((d.getTime() - Date.now()) / 60000));
+          var dH = Math.floor(diffMin / 60), dM = diffMin % 60;
+          var remain = dH + ":" + ("0" + dM).slice(-2) + " 後";
           var mm = d.getMonth() + 1, dd = d.getDate();
           var hh = ("0" + d.getHours()).slice(-2), mi = ("0" + d.getMinutes()).slice(-2);
-          parts.push("次ワイプ <b>" + mm + "/" + dd + " " + hh + ":" + mi + "</b>" + (days >= 0 ? "（あと" + days + "日）" : ""));
+          parts.push("次ワイプ <b>" + mm + "/" + dd + " " + hh + ":" + mi + "</b>（" + remain + "）");
         }
       }
       el.innerHTML = parts.length ? parts.join("　·　") : "サーバー情報なし";
@@ -994,6 +1300,29 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
 
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
   function makeId(prefix) { return prefix + "-" + Math.floor(Math.random() * 1e9) + "-" + Date.now().toString(36); }
+
+  function escapeHtml(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function fmtInt(n) {
+    var v = Math.round(Number(n) || 0);
+    return v.toLocaleString("en-US");
+  }
+  function fmtDateShort(ts) {
+    if (typeof ts !== "number") return "";
+    var d = new Date(ts);
+    return (d.getMonth() + 1) + "/" + d.getDate() + " " + d.getHours() + ":" + ("0" + d.getMinutes()).slice(-2);
+  }
+
+  // RAIDARを開いている累計時間（このブラウザ）。実績称号「サイト稼働」の元データ。
+  var SITE_TIME_KEY = "raidar-site-open-seconds";
+  function siteOpenSeconds() { try { return parseInt(localStorage.getItem(SITE_TIME_KEY) || "0", 10) || 0; } catch (e) { return 0; } }
+  function siteOpenHours() { return siteOpenSeconds() / 3600; }
+  (function trackSiteTime() {
+    try { setInterval(function () { try { localStorage.setItem(SITE_TIME_KEY, String(siteOpenSeconds() + 30)); } catch (e) { /* ignore */ } }, 30000); } catch (e) { /* ignore */ }
+  })();
 
   // Reference-only Steam ID/profile link (BattleMetrics' public search can't resolve a Steam ID
   // to a player anonymously, so this is NOT used for BM ID linking -- just a manual identity check).
@@ -1194,6 +1523,8 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
                 bmId: rm.bmId || null,
                 steamId: rm.steamId || "",
                 sessions: Array.isArray(rm.sessions) ? rm.sessions : [],
+                farmLogs: Array.isArray(rm.farmLogs) ? rm.farmLogs : [],
+                seasons: (rm.seasons && typeof rm.seasons === "object") ? rm.seasons : {},
                 online: localMember ? (localMember.online === true || localMember.online === false ? localMember.online : null) : null,
                 lastOnlineAt: localMember ? (localMember.lastOnlineAt || null) : null
               };
@@ -1212,7 +1543,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
         type: t.type === "friend" ? "friend" : "enemy",
         photos: Array.isArray(t.photos) ? t.photos : [],
         members: (Array.isArray(t.members) ? t.members : []).map(function (m) {
-          return { id: m.id, name: m.name, partial: !!m.partial, bmId: m.bmId || null, steamId: m.steamId || "", sessions: Array.isArray(m.sessions) ? m.sessions : [] };
+          return { id: m.id, name: m.name, partial: !!m.partial, bmId: m.bmId || null, steamId: m.steamId || "", sessions: Array.isArray(m.sessions) ? m.sessions : [], farmLogs: Array.isArray(m.farmLogs) ? m.farmLogs : [], seasons: (m.seasons && typeof m.seasons === "object") ? m.seasons : {} };
         })
       };
     });
@@ -1422,8 +1753,8 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
   // 適応型ポーリング：基本6秒まで攻めてIN/OFFを素早く反映。429（BMのレート制限）を食らったら倍々で
   // バックオフし、成功が続けば徐々に基本値へ戻す＝ブロックされない範囲で"限界まで速く"自己調整する。
   // 1回のポーリングは通常1リクエスト（オンライン<100人なら1ページ）なので6秒でもBM負荷は軽い。
-  var TEAMS_POLL_MIN_MS = 6000;
-  var TEAMS_POLL_MAX_MS = 90000;
+  var TEAMS_POLL_MIN_MS = 60000;   // 1分ごとに更新（社長指定）
+  var TEAMS_POLL_MAX_MS = 300000;  // 429時のバックオフ上限
   var teamsPollMs = TEAMS_POLL_MIN_MS;
 
   function scheduleNextTeamsRefresh() {
@@ -1444,18 +1775,45 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     var rank = function (m) { return m.online === true ? 0 : m.online === false ? 1 : 2; };
     return members
       .map(function (m, idx) { return { m: m, idx: idx }; })
-      .sort(function (a, b) { var ra = rank(a.m), rb = rank(b.m); return ra !== rb ? ra - rb : a.idx - b.idx; })
+      .sort(function (a, b) {
+        var ra = rank(a.m), rb = rank(b.m);
+        if (ra !== rb) return ra - rb;
+        var ea = memberExp(a.m), eb = memberExp(b.m); // 同じオンライン状態ならレベル（EXP）高い順
+        if (eb !== ea) return eb - ea;
+        return a.idx - b.idx;
+      })
       .map(function (x) { return x.m; });
   }
 
   function formatLastSeen(ts) {
-    var d = new Date(ts);
-    var pad = function (n) { return (n < 10 ? "0" : "") + n; };
-    return "最終IN: " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+    var diffMin = Math.floor((Date.now() - ts) / 60000);
+    if (diffMin < 1) return "たった今OFF";
+    if (diffMin < 60) return diffMin + "分前にOFF";
+    var h = Math.floor(diffMin / 60);
+    if (h < 24) return h + "時間前にOFF";
+    return Math.floor(h / 24) + "日前にOFF";
   }
 
+  function formatOnlineDuration(ms) {
+    if (ms < 0) ms = 0;
+    var mins = Math.floor(ms / 60000);
+    var h = Math.floor(mins / 60), m = mins % 60;
+    if (h > 0) return h + "時間" + m + "分";
+    return m + "分";
+  }
+  function currentSessionStart(member) {
+    var s = Array.isArray(member.sessions) ? member.sessions : [];
+    for (var i = s.length - 1; i >= 0; i--) {
+      if (s[i] && (s[i].end === null || s[i].end === undefined) && typeof s[i].start === "number") return s[i].start;
+    }
+    return null;
+  }
   function updateLastSeenEl(el, member) {
-    if (member.online === false && member.lastOnlineAt) {
+    if (member.online === true) {
+      var st = currentSessionStart(member);
+      el.textContent = st ? ("IN " + formatOnlineDuration(Date.now() - st)) : "IN中";
+      el.classList.remove("is-empty");
+    } else if (member.online === false && member.lastOnlineAt) {
       el.textContent = formatLastSeen(member.lastOnlineAt);
       el.classList.remove("is-empty");
     } else {
@@ -1481,16 +1839,53 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     countEl.textContent = total;
     if (iconEl) iconEl.textContent = total > 0 ? "⚠ " : "";
     bar.classList.toggle("has-online", total > 0);
+    updateEnemyAlert();
+  }
+
+  // 敵がINしたらヘッダー下に通知チップを出す。押すとその敵チームのカードへスクロール＋一瞬ハイライト。
+  function scrollToTeam(teamId) {
+    var cardEl = document.querySelector('#teams-cards .team-card[data-team-id="' + CSS.escape(teamId) + '"]');
+    if (!cardEl) return;
+    cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    cardEl.classList.remove("flash"); void cardEl.offsetWidth; cardEl.classList.add("flash");
+    setTimeout(function () { cardEl.classList.remove("flash"); }, 1700);
+  }
+  function updateEnemyAlert() {
+    var el = document.getElementById("enemy-alert");
+    if (!el) return;
+    var online = teamsState.teams.filter(function (t) { return t.type !== "friend"; })
+      .map(function (t) { return { team: t, n: t.members.filter(function (m) { return m.online === true; }).length }; })
+      .filter(function (x) { return x.n > 0; });
+    if (!online.length) { el.hidden = true; el.textContent = ""; return; }
+    el.hidden = false;
+    el.textContent = "";
+    var total = online.reduce(function (a, x) { return a + x.n; }, 0);
+    var label = document.createElement("span");
+    label.className = "ea-label";
+    label.textContent = "⚠ 敵 " + total + "人 IN中 —";
+    el.appendChild(label);
+    online.forEach(function (x) {
+      var chip = document.createElement("button");
+      chip.type = "button"; chip.className = "ea-chip";
+      chip.textContent = x.team.name + "（" + x.n + "）";
+      chip.title = x.team.name + " のチームへ移動";
+      chip.addEventListener("click", function () { scrollToTeam(x.team.id); });
+      el.appendChild(chip);
+    });
   }
 
   function updateTabTitle() {
     var total = computeTotalOnline();
-    document.title = total > 0 ? "(" + total + ") 敵チーム監視" : "敵チーム監視";
+    document.title = total > 0 ? "(" + total + ") RAIDAR" : "RAIDAR";
   }
 
+  var NOTIF_PREF_KEY = "raidar-desktop-notif";
+  function notifEnabledPref() { try { return localStorage.getItem(NOTIF_PREF_KEY) !== "0"; } catch (e) { return true; } }
+  function setNotifPref(on) { try { localStorage.setItem(NOTIF_PREF_KEY, on ? "1" : "0"); } catch (e) { /* ignore */ } }
   function sendDesktopNotification(title, body) {
     if (!("Notification" in window)) return;
     if (Notification.permission !== "granted") return;
+    if (!notifEnabledPref()) return; // 許可済みでもユーザーがOFFにしていたら送らない
     try { new Notification(title, { body: body }); } catch (e) { /* ignore */ }
   }
 
@@ -1533,6 +1928,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     });
     updateGlobalBar();
     updateTabTitle();
+    if (!document.querySelector("#friend-cards input:focus")) renderFriendTeams();
   }
 
   function createNameSearchWidget(config) {
@@ -1718,6 +2114,39 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
           try {
             resolve(canvas.toDataURL("image/jpeg", 0.6));
           } catch (err) { reject(err); }
+        };
+        img.onerror = function () { reject(new Error("image decode failed")); };
+        img.src = e.target.result;
+      };
+      reader.onerror = function () { reject(new Error("file read failed")); };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // OCR前処理：拡大＋グレースケール＋反転＋2値化。rustoriaは白文字×暗背景でTesseractが苦手なので、
+  // 黒文字×白背景に変換して認識率を上げる。返り値はOCRにかけるcanvas。
+  function preprocessForOcr(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        var img = new Image();
+        img.onload = function () {
+          var scale = Math.max(1, Math.min(2.2, 1700 / Math.max(1, img.width)));
+          var w = Math.max(1, Math.round(img.width * scale)), h = Math.max(1, Math.round(img.height * scale));
+          var c = document.createElement("canvas"); c.width = w; c.height = h;
+          var ctx = c.getContext("2d");
+          ctx.drawImage(img, 0, 0, w, h);
+          try {
+            var id = ctx.getImageData(0, 0, w, h), d = id.data;
+            for (var k = 0; k < d.length; k += 4) {
+              var lum = 0.299 * d[k] + 0.587 * d[k + 1] + 0.114 * d[k + 2];
+              var inv = 255 - lum;            // 白文字→黒
+              var bw = inv < 135 ? 0 : 255;   // 2値化（黒文字×白背景）
+              d[k] = d[k + 1] = d[k + 2] = bw;
+            }
+            ctx.putImageData(id, 0, 0);
+          } catch (err) { /* getImageData失敗時は元画像のまま */ }
+          resolve(c);
         };
         img.onerror = function () { reject(new Error("image decode failed")); };
         img.src = e.target.result;
@@ -2076,6 +2505,703 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     return buckets;
   }
 
+  // ---------- ゲーミフィケーション：総IN時間→レベル＆称号／連続ストリーク／時間帯タイプ ----------
+  // レベルが上がるごとに称号が変わる100段階（しょうもないの込み）。level(1〜)で LEVEL_TITLES[level-1] を引く。
+  var LEVEL_TITLES = [
+    "漂流者", "石斧の民", "たいまつ持ち", "新入り", "ふんどし戦士", "素っ裸の勇者", "寝袋の主", "拾い屋", "かかし", "木こり見習い",
+    "石拾い名人", "新兵", "ボロ布の民", "たき火の番人", "寝落ち勢", "夜更かし", "資源ドロボウ", "こそこそ勢", "住人", "ベリー農家",
+    "きのこ狩り", "罠師", "見張り", "弓の使い手", "リス（隠し屋）", "貯め込み屋", "常連", "古参", "ベース職人", "TC守護者",
+    "ハチの巣建築家", "迷路の設計者", "重装兵", "サルファーの民", "硫黄王", "火薬錬金術師", "ロケットマン", "C4クラフター", "レイダー見習い", "壁ドン職人",
+    "ヌシ", "廃墟の主", "サーバーの主", "夜の支配者", "カウンター", "監視者", "気配察知", "メタゲーマー", "効率厨", "廃人見習い",
+    "廃人", "社会復帰不可", "睡眠を捨てた者", "現実逃避マスター", "時間泥棒", "サーバーに住む者", "ログイン依存症", "無限リスポーン", "死なばもろとも", "KDR職人",
+    "ヘッショマシン", "エイム神", "一人軍隊", "ソロの帝王", "クランの柱", "リーダー", "総大将", "戦場の亡霊", "不死身", "伝説のnaked",
+    "サーバー最古参", "生ける伝説", "ラスト四天王", "ラスト仙人", "悟りを開いた者", "木の妖精", "石の化身", "硫黄の権化", "爆破の神", "レイドの王",
+    "建築の神", "ワイプを超えし者", "時空の旅人", "サーバーの神", "Rustの主", "ネイキッドの王", "無の境地", "全知全能", "太陽神", "創造主",
+    "Rustそのもの", "概念", "伝説を超えた者", "もはや人間ではない", "Rustに愛された男", "Rustに呪われた男", "帰ってこれない人", "外の世界を忘れた者", "ヌシ・オブ・ヌシ", "Rust廃神",
+    "Rust星人", "ワイプの支配者", "サーバーを生んだ者", "時間の外の住人", "無限廃人", "廃神を超えし者", "データになった男", "サーバーの意志", "電子の亡霊", "次元の観測者",
+    "ログアウトを忘れた神", "現実の敗北者", "Rust本体", "運営より詳しい男", "アプデを予言する者", "メタの創造主", "バランス崩壊の元凶", "ヌシ・オブ・ヌシ・オブ・ヌシ", "伝説の伝説", "神々の廃神",
+    "宇宙の管理者", "ビッグバンの目撃者", "時空を耕す者", "無からリスポーンする者", "概念の硫黄", "抽象存在", "Rustという名の宗教", "教祖", "預言者", "全サーバーの王",
+    "星系の征服者", "銀河のnaked", "ブラックホールを建築した男", "光速の採掘者", "時間を止める者", "並行世界の廃人", "マルチバースの主", "∞レベル", "レベルの概念を超えた者", "神を辞めた男",
+    "二度と戻らない者", "電源を抜けない者", "睡眠という概念の敵", "太陽を燃料にする者", "惑星を寝袋にする者", "恒星系ファーマー", "次元間レイダー", "because Rust", "語彙が尽きた者", "称号製造機の限界",
+    "開発者の悪夢", "サーバー費の主", "電気代の犠牲者", "家族に忘れられた男", "外の季節を知らない者", "窓を開けない者", "陽の光アレルギー", "伝説はもう古い", "神話も陳腐", "新たな神",
+    "第二の創造主", "Rust2を待つ者", "永遠のワイプ", "時計を捨てた者", "カレンダーの敵", "一年を溶かした男", "十年選手", "四半世紀の廃人", "生まれる前からIN", "死後もIN予定",
+    "墓場からリスポーン", "不老不死のnaked", "時間泥棒の親玉", "現実逃避の完成形", "逃げ切った男", "戻る気ゼロ", "悟りの向こう側", "無我のファーム", "禅ファーマー", "心を捨てた採掘者",
+    "AIより働く男", "botと疑われる者", "24時間IN証明済み", "睡眠負債の王", "カフェインの化身", "限界の先", "限界などない", "称号がインフレした", "もう誰も止められない", "伝説を量産する者",
+    "神を量産する者", "裏ボス", "真・END", "隠しレベル", "デバッグモードの住人", "Rustに生まれRustに死す", "無限の彼方", "そして伝説へ", "Rust廃神・真", "Rust廃神・極"
+  ];
+  function memberTotalOnlineMs(member) {
+    var s = Array.isArray(member.sessions) ? member.sessions : [];
+    var tot = 0, now = Date.now();
+    s.forEach(function (x) {
+      if (!x || typeof x.start !== "number") return;
+      var end;
+      if (typeof x.end === "number") end = x.end;
+      else if (member.online === true) end = now; // 今オンライン中の未クローズセッションだけ現在時刻まで数える
+      else end = (typeof member.lastOnlineAt === "number" && member.lastOnlineAt > x.start) ? member.lastOnlineAt : x.start; // オフラインなら最終確認時刻で止める（増え続け防止）
+      if (end > x.start) tot += (end - x.start);
+    });
+    return tot;
+  }
+  // ===== 経験値・レベル（最大100・なかなか上がらない） =====
+  // EXPの源泉：①ファーム記録（スクショ照合つき・主軸）②IN時間（少しだけ加算）。
+  // 敵はファーム記録が付けられないのでIN時間ぶんだけでLvが付く。
+  var LEVEL_HARD_CAP = 100000; // レベル上限は「無制限」。これは無限ループ防止の安全弁のみ（実際到達不能）。
+  // 称号レアリティ（幅多め・14段階）。レベルが上がるほど上位レアに。minLevel以上で該当。
+  var RARITIES = [
+    { key: "common",       label: "コモン",           color: "#9c937f", minLevel: 1 },
+    { key: "uncommon",     label: "アンコモン",       color: "#8fb96e", minLevel: 8 },
+    { key: "rare",         label: "レア",             color: "#6fa8c9", minLevel: 16 },
+    { key: "superrare",    label: "スーパーレア",     color: "#5fc9c0", minLevel: 24 },
+    { key: "epic",         label: "エピック",         color: "#a97fd0", minLevel: 32 },
+    { key: "legendary",    label: "レジェンダリー",   color: "#d6ab57", minLevel: 40 },
+    { key: "mythic",       label: "ミシック",         color: "#e0844a", minLevel: 48 },
+    { key: "unreal",       label: "アンリアル",       color: "#e06a9a", minLevel: 56 },
+    { key: "divine",       label: "ディヴァイン",     color: "#f0e6c0", minLevel: 64 },
+    { key: "cosmic",       label: "コズミック",       color: "#8f8fe0", minLevel: 72 },
+    { key: "transcend",    label: "トランセンデント", color: "#79d0b8", minLevel: 80 },
+    { key: "eternal",      label: "エターナル",       color: "#e0c56a", minLevel: 88 },
+    { key: "godtier",      label: "ゴッドティア",     color: "#ffd479", minLevel: 94 },
+    { key: "beyond",       label: "廃神級",           color: "#ff8fd0", minLevel: 100 }
+  ];
+  function rarityForLevel(level) {
+    var r = RARITIES[0];
+    for (var i = 0; i < RARITIES.length; i++) { if (level >= RARITIES[i].minLevel) r = RARITIES[i]; }
+    return r;
+  }
+  var LEVEL_EXP_K = 28, LEVEL_EXP_P = 2.45; // Lv100到達に約1.9M EXP。高レベルほど鬼のように重い。
+  var IN_EXP_PER_HOUR = 8;                  // 味方：IN時間の寄与は控えめ（主軸はファーム記録）
+  var IN_EXP_PER_HOUR_ENEMY = 55;           // 敵：ファーム記録が付けられない分、IN時間EXPを大幅ブースト（上がりやすく）
+  // ファーム記録：rustoriaのRESOURCES画面のスクショを貼り、写っている数値を入力する（スクショが証拠）。
+  // 資源ごとに単価が違う（硫黄・高品質金属は高い、石・木は安い）。照合システムは無し。
+  // ※単価は設計値（ゲーム事実ではない）。ここを変えるだけで全記録のEXPが再計算される。
+  // rustoriaのRESOURCES＋FARMINGタブ相当を全種カバー。exp=1個あたりのEXP単価（希少なほど高い）。
+  var RESOURCE_TYPES = [
+    // --- RESOURCES ---
+    { id: "sulfur_ore",   name: "硫黄鉱石",       exp: 0.5 },
+    { id: "metal_ore",    name: "金属鉱石",       exp: 0.15 },
+    { id: "hq_metal_ore", name: "高品質金属鉱石", exp: 3 },
+    { id: "stones",       name: "石",             exp: 0.02 },
+    { id: "wood",         name: "木",             exp: 0.02 },
+    { id: "leather",      name: "レザー",         exp: 0.3 },
+    { id: "animal_fat",   name: "動物の脂",       exp: 0.2 },
+    { id: "bone",         name: "骨片",           exp: 0.1 },
+    // --- FARMING（栽培・採集）---
+    { id: "cloth",        name: "布(ヘンプ)",     exp: 0.1 },
+    { id: "yellow_berry", name: "黄ベリー",       exp: 0.1 },
+    { id: "red_berry",    name: "赤ベリー",       exp: 0.1 },
+    { id: "blue_berry",   name: "青ベリー",       exp: 0.15 },
+    { id: "green_berry",  name: "緑ベリー",       exp: 0.2 },
+    { id: "white_berry",  name: "白ベリー",       exp: 0.2 },
+    { id: "mushroom",     name: "きのこ",         exp: 0.1 },
+    { id: "pumpkin",      name: "かぼちゃ",       exp: 0.3 },
+    { id: "corn",         name: "とうもろこし",   exp: 0.2 },
+    { id: "potato",       name: "じゃがいも",     exp: 0.2 },
+    { id: "wheat",        name: "小麦",           exp: 0.2 },
+    { id: "flowers",      name: "花",             exp: 0.1 },
+    { id: "eggs",         name: "卵",             exp: 0.4 },
+    // --- その他 ---
+    { id: "scrap",        name: "スクラップ",     exp: 1 },
+    { id: "lowgrade",     name: "低品質燃料",     exp: 0.2 },
+    // --- PVP（キル系）---
+    { id: "kills",          name: "キル",           exp: 30,   grp: "PVP" },
+    { id: "headshots",      name: "ヘッドショット", exp: 20,   grp: "PVP" },
+    { id: "bullets_hit",    name: "命中弾",         exp: 0.2,  grp: "PVP" },
+    { id: "deaths",         name: "死亡(ネタ)",     exp: 0,    grp: "PVP" },
+    { id: "suicides",       name: "自殺(ネタ)",     exp: 0,    grp: "PVP" },
+    // --- PVE／モニュメント ---
+    { id: "scientist_kills",name: "サイエンティスト", exp: 15, grp: "モニュメント" },
+    { id: "heavy_scientist",name: "ヘビー科学者",   exp: 25,   grp: "モニュメント" },
+    { id: "bradley_kills",  name: "ブラッドリー撃破", exp: 1500, grp: "モニュメント" },
+    { id: "heli_kills",     name: "ヘリ撃破",       exp: 3000, grp: "モニュメント" },
+    // --- レイド ---
+    { id: "rockets",        name: "ロケット",       exp: 10,   grp: "レイド" },
+    { id: "c4_thrown",      name: "C4",             exp: 30,   grp: "レイド" },
+    { id: "satchels",       name: "サッチェル",     exp: 8,    grp: "レイド" },
+    // --- 建築 ---
+    { id: "blocks_placed",  name: "設置ブロック",   exp: 1,    grp: "建築" },
+    { id: "blocks_upgraded",name: "強化ブロック",   exp: 1,    grp: "建築" },
+    // --- ルート ---
+    { id: "crates_looted",  name: "クレート",       exp: 5,    grp: "ルート" },
+    { id: "barrels_broken", name: "バレル",         exp: 2,    grp: "ルート" }
+  ];
+  function cumulativeExpForLevel(L) { return L <= 1 ? 0 : Math.round(LEVEL_EXP_K * Math.pow(L - 1, LEVEL_EXP_P)); }
+  function memberFarmLogs(member) { return Array.isArray(member.farmLogs) ? member.farmLogs : []; }
+  function farmLogBaseExp(log) {
+    var res = (log && log.resources) || {};
+    var sum = 0;
+    RESOURCE_TYPES.forEach(function (rt) { sum += (Number(res[rt.id]) || 0) * rt.exp; });
+    return sum;
+  }
+  function farmLogExp(log) { return Math.round(farmLogBaseExp(log)); }
+  // ===== 実績称号：資源などの累計が閾値を超えると「獲得」する称号。段階ごとにレアリティ（色）。 =====
+  // レベル称号（漂流者…）とは別軸。rk はレアリティキー（RARITIESと対応）。
+  var ACHIEVEMENTS = [
+    { cat: "硫黄", stat: "sulfur_ore", tiers: [
+      { n: "硫黄拾い", th: 3000, rk: "common" }, { n: "硫黄掘り", th: 15000, rk: "uncommon" },
+      { n: "硫黄採掘者", th: 50000, rk: "rare" }, { n: "硫黄中毒", th: 120000, rk: "superrare" },
+      { n: "硫黄王", th: 250000, rk: "epic" }, { n: "硫黄の権化", th: 500000, rk: "legendary" },
+      { n: "硫黄で出来た男", th: 1000000, rk: "mythic" }, { n: "硫黄神", th: 3000000, rk: "godtier" } ] },
+    { cat: "石", stat: "stones", tiers: [
+      { n: "石ころ拾い", th: 3000, rk: "common" }, { n: "石工見習い", th: 30000, rk: "uncommon" },
+      { n: "石工", th: 100000, rk: "rare" }, { n: "つるはし依存症", th: 250000, rk: "superrare" },
+      { n: "石の化身", th: 500000, rk: "epic" }, { n: "岩盤破壊者", th: 1000000, rk: "legendary" },
+      { n: "山を削る者", th: 2500000, rk: "mythic" }, { n: "地形を変えた男", th: 6000000, rk: "godtier" } ] },
+    { cat: "木", stat: "wood", tiers: [
+      { n: "小枝拾い", th: 3000, rk: "common" }, { n: "木こり", th: 30000, rk: "uncommon" },
+      { n: "伐採者", th: 100000, rk: "rare" }, { n: "斧が手放せない人", th: 250000, rk: "superrare" },
+      { n: "森の破壊者", th: 500000, rk: "epic" }, { n: "木の妖精", th: 1000000, rk: "legendary" },
+      { n: "森林皆伐", th: 2500000, rk: "mythic" }, { n: "地球を丸裸にした男", th: 6000000, rk: "godtier" } ] },
+    { cat: "金属", stat: "metal_ore", tiers: [
+      { n: "金属拾い", th: 2000, rk: "common" }, { n: "金属掘り", th: 12000, rk: "uncommon" },
+      { n: "製錬者", th: 40000, rk: "rare" }, { n: "精錬中毒", th: 100000, rk: "superrare" },
+      { n: "金属王", th: 200000, rk: "epic" }, { n: "鉄の支配者", th: 450000, rk: "legendary" },
+      { n: "鋼鉄の化身", th: 900000, rk: "mythic" }, { n: "金属神", th: 2500000, rk: "godtier" } ] },
+    { cat: "高品質金属", stat: "hq_metal_ore", tiers: [
+      { n: "HQ拾い", th: 50, rk: "common" }, { n: "HQ掘り", th: 300, rk: "uncommon" },
+      { n: "HQ採掘者", th: 1000, rk: "rare" }, { n: "HQに取り憑かれた者", th: 2500, rk: "superrare" },
+      { n: "HQ王", th: 5000, rk: "epic" }, { n: "HQの権化", th: 12000, rk: "legendary" },
+      { n: "HQを掘り尽くす者", th: 30000, rk: "mythic" }, { n: "HQ神", th: 80000, rk: "godtier" } ] },
+    { cat: "布", stat: "cloth", tiers: [
+      { n: "布集め", th: 2000, rk: "common" }, { n: "ヘンプ農家", th: 15000, rk: "uncommon" },
+      { n: "裁縫師", th: 50000, rk: "rare" }, { n: "服が止まらない人", th: 120000, rk: "superrare" },
+      { n: "布王", th: 250000, rk: "epic" }, { n: "衣の支配者", th: 600000, rk: "legendary" },
+      { n: "全裸に布を配る者", th: 1500000, rk: "mythic" } ] },
+    { cat: "レザー", stat: "leather", tiers: [
+      { n: "皮はぎ", th: 200, rk: "common" }, { n: "なめし職人", th: 1500, rk: "uncommon" },
+      { n: "革細工師", th: 6000, rk: "rare" }, { n: "動物の天敵", th: 20000, rk: "epic" },
+      { n: "レザーの覇者", th: 60000, rk: "mythic" } ] },
+    { cat: "動物の脂", stat: "animal_fat", tiers: [
+      { n: "脂集め", th: 200, rk: "common" }, { n: "ベーコン職人", th: 1500, rk: "uncommon" },
+      { n: "ロウソク工房", th: 6000, rk: "rare" }, { n: "脂ぎった男", th: 20000, rk: "epic" },
+      { n: "脂の海の主", th: 60000, rk: "mythic" } ] },
+    { cat: "骨", stat: "bone", tiers: [
+      { n: "骨拾い", th: 200, rk: "common" }, { n: "墓荒らし", th: 1500, rk: "uncommon" },
+      { n: "ボーンアーマー愛好家", th: 6000, rk: "rare" }, { n: "骨まみれ", th: 20000, rk: "epic" },
+      { n: "ネクロマンサー", th: 60000, rk: "mythic" } ] },
+    { cat: "スクラップ", stat: "scrap", tiers: [
+      { n: "スクラップ拾い", th: 500, rk: "common" }, { n: "リサイクラー", th: 3000, rk: "uncommon" },
+      { n: "スクラップ王", th: 10000, rk: "rare" }, { n: "研究者", th: 30000, rk: "superrare" },
+      { n: "テクノロジーの覇者", th: 80000, rk: "epic" }, { n: "スクラップ長者", th: 200000, rk: "legendary" } ] },
+    { cat: "低品質燃料", stat: "lowgrade", tiers: [
+      { n: "給油係", th: 300, rk: "common" }, { n: "ガソスタ店員", th: 2000, rk: "uncommon" },
+      { n: "放火魔", th: 8000, rk: "rare" }, { n: "火炎放射の申し子", th: 25000, rk: "epic" },
+      { n: "世界を燃やす者", th: 70000, rk: "mythic" } ] },
+    { cat: "ベリー", stat: "__berry__", tiers: [
+      { n: "ベリー摘み", th: 200, rk: "common" }, { n: "ジャム職人", th: 1500, rk: "uncommon" },
+      { n: "ベリー農家", th: 6000, rk: "rare" }, { n: "果実の王", th: 20000, rk: "epic" },
+      { n: "ベリーの支配者", th: 60000, rk: "mythic" } ] },
+    { cat: "農作物", stat: "__crops__", tiers: [
+      { n: "家庭菜園", th: 200, rk: "common" }, { n: "畑仕事", th: 1500, rk: "uncommon" },
+      { n: "農夫", th: 6000, rk: "rare" }, { n: "大農園主", th: 20000, rk: "epic" },
+      { n: "農業王", th: 60000, rk: "mythic" } ] },
+    { cat: "きのこ", stat: "mushroom", tiers: [
+      { n: "きのこ狩り", th: 100, rk: "common" }, { n: "菌類学者", th: 1000, rk: "uncommon" },
+      { n: "きのこの森の主", th: 5000, rk: "rare" }, { n: "マッシュルーム帝国", th: 15000, rk: "epic" } ] },
+    { cat: "卵", stat: "eggs", tiers: [
+      { n: "卵拾い", th: 50, rk: "common" }, { n: "養鶏場", th: 500, rk: "uncommon" },
+      { n: "たまごの支配者", th: 2500, rk: "rare" }, { n: "全卵掌握", th: 8000, rk: "epic" } ] },
+    { cat: "花", stat: "flowers", tiers: [
+      { n: "花摘み", th: 50, rk: "common" }, { n: "花屋さん", th: 500, rk: "uncommon" },
+      { n: "フラワーロード", th: 2500, rk: "rare" }, { n: "花の王国", th: 8000, rk: "epic" } ] },
+    { cat: "キル", stat: "kills", tiers: [
+      { n: "初キル", th: 1, rk: "common" }, { n: "駆け出しの殺し屋", th: 25, rk: "uncommon" },
+      { n: "手練れ", th: 100, rk: "rare" }, { n: "ヘッドハンター", th: 250, rk: "superrare" },
+      { n: "一人軍隊", th: 500, rk: "epic" }, { n: "死神", th: 1000, rk: "legendary" },
+      { n: "サーバーの恐怖", th: 2500, rk: "mythic" }, { n: "皆殺しの詩人", th: 6000, rk: "godtier" } ] },
+    { cat: "レイド", stat: "__raid__", tiers: [
+      { n: "初レイド", th: 1, rk: "common" }, { n: "ドア屋", th: 20, rk: "uncommon" },
+      { n: "壁壊し", th: 80, rk: "rare" }, { n: "C4ソムリエ", th: 200, rk: "superrare" },
+      { n: "オフラインの悪夢", th: 500, rk: "epic" }, { n: "基地破壊神", th: 1200, rk: "legendary" },
+      { n: "更地製造機", th: 3000, rk: "mythic" }, { n: "レイドの化身", th: 8000, rk: "godtier" } ] },
+    { cat: "モニュメント", stat: "__monument__", tiers: [
+      { n: "モニュメント観光客", th: 10, rk: "common" }, { n: "サイエンティスト狩り", th: 100, rk: "uncommon" },
+      { n: "施設制圧者", th: 400, rk: "rare" }, { n: "ヘリハンター", th: 1000, rk: "superrare" },
+      { n: "モニュメントの主", th: 2500, rk: "epic" }, { n: "空を落とす者", th: 6000, rk: "legendary" },
+      { n: "施設殲滅者", th: 15000, rk: "mythic" } ] },
+    { cat: "建築", stat: "blocks_placed", tiers: [
+      { n: "寝袋設置", th: 1, rk: "common" }, { n: "1x1建築士", th: 100, rk: "uncommon" },
+      { n: "ハニカム職人", th: 500, rk: "rare" }, { n: "迷路の設計者", th: 1500, rk: "superrare" },
+      { n: "要塞建築家", th: 4000, rk: "epic" }, { n: "難攻不落", th: 10000, rk: "legendary" },
+      { n: "建築の神", th: 25000, rk: "mythic" } ] },
+    { cat: "ルート", stat: "crates_looted", tiers: [
+      { n: "バレル漁り", th: 20, rk: "common" }, { n: "クレート開け", th: 100, rk: "uncommon" },
+      { n: "収集家", th: 400, rk: "rare" }, { n: "物資王", th: 1000, rk: "superrare" },
+      { n: "宝の亡者", th: 3000, rk: "epic" }, { n: "ルートの覇者", th: 8000, rk: "legendary" } ] },
+    { cat: "死亡（ネタ）", stat: "deaths", tiers: [
+      { n: "崖から落ちる者", th: 1, rk: "common" }, { n: "自爆芸人", th: 25, rk: "uncommon" },
+      { n: "リスポーン職人", th: 100, rk: "rare" }, { n: "死に戻りの達人", th: 300, rk: "superrare" },
+      { n: "不死鳥（何度も死ぬ）", th: 700, rk: "epic" }, { n: "死神に嫌われた男", th: 1500, rk: "legendary" } ] },
+    { cat: "敵チーム登録", stat: "__enemy_teams__", tiers: [
+      { n: "偵察開始", th: 1, rk: "common" }, { n: "監視員", th: 3, rk: "uncommon" },
+      { n: "情報屋", th: 6, rk: "rare" }, { n: "諜報部長", th: 12, rk: "epic" },
+      { n: "全チームお見通し", th: 25, rk: "mythic" } ] },
+    { cat: "拠点スクショ", stat: "__base_photos__", tiers: [
+      { n: "初撮影", th: 1, rk: "common" }, { n: "偵察カメラマン", th: 5, rk: "uncommon" },
+      { n: "拠点コレクター", th: 15, rk: "rare" }, { n: "航空写真家", th: 40, rk: "epic" },
+      { n: "全拠点を暴く者", th: 100, rk: "mythic" } ] },
+    { cat: "サイト稼働（監視時間）", stat: "__site_time__", tiers: [
+      { n: "偵察見習い", th: 1, rk: "common" }, { n: "常駐監視員", th: 10, rk: "uncommon" },
+      { n: "RAIDAR中毒", th: 50, rk: "rare" }, { n: "監視の鬼", th: 200, rk: "epic" },
+      { n: "RAIDARに住む者", th: 1000, rk: "mythic" } ] },
+    { cat: "総資源（ネタ）", stat: "__totalres__", tiers: [
+      { n: "働き者", th: 20000, rk: "common" }, { n: "社畜", th: 100000, rk: "uncommon" },
+      { n: "無心でファームする人", th: 300000, rk: "rare" }, { n: "ファーム奴隷", th: 800000, rk: "superrare" },
+      { n: "現実を捨てた男", th: 2000000, rk: "epic" }, { n: "ファームの鬼", th: 5000000, rk: "legendary" },
+      { n: "資源を吸う掃除機", th: 12000000, rk: "mythic" }, { n: "惑星を丸裸にした男", th: 30000000, rk: "godtier" },
+      { n: "宇宙の資源を狩る者", th: 80000000, rk: "beyond" } ] },
+    { cat: "記録の沼（ネタ）", stat: "__records__", tiers: [
+      { n: "記録初心者", th: 1, rk: "common" }, { n: "スクショ係", th: 5, rk: "uncommon" },
+      { n: "記録が趣味", th: 15, rk: "rare" }, { n: "記録依存症", th: 40, rk: "superrare" },
+      { n: "スクショ廃人", th: 100, rk: "epic" }, { n: "記録の亡者", th: 250, rk: "legendary" },
+      { n: "人生を記録に捧げた男", th: 600, rk: "mythic" }, { n: "記録そのもの", th: 1500, rk: "godtier" } ] }
+  ];
+  function memberResourceTotal(member, statId) {
+    return memberFarmLogs(member).reduce(function (a, l) {
+      var res = (l && l.resources) || {}; return a + (Number(res[statId]) || 0);
+    }, 0);
+  }
+  // カテゴリの「累計値」を返す。__records__=記録回数、__totalres__=全資源合計、それ以外=その資源の累計。
+  function sumResourceIds(member, ids) {
+    return memberFarmLogs(member).reduce(function (a, l) {
+      var res = (l && l.resources) || {}, s = 0;
+      ids.forEach(function (id) { s += Number(res[id]) || 0; });
+      return a + s;
+    }, 0);
+  }
+  var BERRY_IDS = ["yellow_berry", "red_berry", "blue_berry", "green_berry", "white_berry"];
+  var CROP_IDS = ["pumpkin", "corn", "potato", "wheat"];
+  var RAID_IDS = ["rockets", "c4_thrown", "satchels"];
+  var MONUMENT_IDS = ["scientist_kills", "heavy_scientist", "bradley_kills", "heli_kills"];
+  function achievementStatValue(member, cat) {
+    if (cat.stat === "__records__") return memberFarmLogs(member).length;
+    if (cat.stat === "__totalres__") return sumResourceIds(member, RESOURCE_TYPES.map(function (rt) { return rt.id; }));
+    if (cat.stat === "__berry__") return sumResourceIds(member, BERRY_IDS);
+    if (cat.stat === "__crops__") return sumResourceIds(member, CROP_IDS);
+    if (cat.stat === "__raid__") return sumResourceIds(member, RAID_IDS);
+    if (cat.stat === "__monument__") return sumResourceIds(member, MONUMENT_IDS);
+    // ルーム全体の活動（誰が追加したかは持たないので、チーム全員で共有する実績）
+    if (cat.stat === "__enemy_teams__") return teamsState.teams.filter(function (t) { return t.type === "enemy"; }).length;
+    if (cat.stat === "__base_photos__") return teamsState.teams.reduce(function (a, t) { return a + (Array.isArray(t.photos) ? t.photos.length : 0); }, 0);
+    if (cat.stat === "__site_time__") return siteOpenHours();
+    return memberResourceTotal(member, cat.stat);
+  }
+  // 各カテゴリの獲得状況。earned=獲得済み最上位tier（無ければnull）、next=次に狙えるtier（無ければnull）、total=累計。
+  function memberAchievements(member) {
+    return ACHIEVEMENTS.map(function (cat) {
+      var total = achievementStatValue(member, cat);
+      var earned = null, next = null;
+      cat.tiers.forEach(function (ti) {
+        if (total >= ti.th) earned = ti;
+        else if (!next) next = ti;
+      });
+      return { cat: cat.cat, total: total, earned: earned, next: next };
+    });
+  }
+  function rarityByKey(k) { for (var i = 0; i < RARITIES.length; i++) { if (RARITIES[i].key === k) return RARITIES[i]; } return RARITIES[0]; }
+  // レアリティごとに、その称号を獲得したときにもらえるEXP（レアなほど大量）。
+  var RARITY_EXP = {
+    common: 500, uncommon: 1500, rare: 4000, superrare: 10000, epic: 25000, legendary: 60000,
+    mythic: 150000, unreal: 300000, divine: 600000, cosmic: 1200000, transcend: 2500000,
+    eternal: 5000000, godtier: 10000000, beyond: 25000000
+  };
+  function rarityExp(key) { return RARITY_EXP[key] || 0; }
+  // 獲得済み実績称号ぶんのEXP合計（獲得した各tierのレアリティEXPを積み上げ）。
+  function achievementExp(member) {
+    var sum = 0;
+    ACHIEVEMENTS.forEach(function (cat) {
+      var total = achievementStatValue(member, cat);
+      cat.tiers.forEach(function (ti) { if (total >= ti.th) sum += rarityExp(ti.rk); });
+    });
+    return sum;
+  }
+
+  // 記録の資源を「硫黄6,220・金属12,926…」の短い要約に（多い順・上位3種）。
+  function farmLogResourceSummary(log) {
+    var res = (log && log.resources) || {};
+    var arr = RESOURCE_TYPES
+      .map(function (rt) { return { name: rt.name, v: Number(res[rt.id]) || 0 }; })
+      .filter(function (x) { return x.v > 0; })
+      .sort(function (a, b) { return b.v - a.v; });
+    if (!arr.length) return "";
+    var top = arr.slice(0, 3).map(function (x) { return x.name + " " + fmtInt(x.v); });
+    return top.join("・") + (arr.length > 3 ? (" 他" + (arr.length - 3) + "種") : "");
+  }
+
+  // rustoria RESOURCES画面のOCR用ラベル。HQ METAL ORE は METAL ORE より先に処理する（部分一致の取り違え防止）。
+  var OCR_LABELS = [
+    { id: "hq_metal_ore", re: /HQ\s*METAL\s*ORE/i },
+    { id: "metal_ore",    re: /METAL\s*ORE/i },
+    { id: "sulfur_ore",   re: /SUL[FT]?UR\s*ORE/i },
+    { id: "stones",       re: /STONES?\b/i },
+    { id: "wood",         re: /WOOD\s*HARVESTED/i },
+    { id: "cloth",        re: /CLOTH/i },
+    { id: "leather",      re: /LEATHER/i },
+    { id: "animal_fat",   re: /ANIMAL\s*FAT/i },
+    { id: "bone",         re: /BONE\s*FRAG/i },
+    { id: "yellow_berry", re: /YELLOW\s*BERRY/i },
+    { id: "red_berry",    re: /RED\s*BERRY/i },
+    { id: "blue_berry",   re: /BLUE\s*BERRY/i },
+    { id: "green_berry",  re: /GREEN\s*BERRY/i },
+    { id: "white_berry",  re: /WHITE\s*BERRY/i },
+    { id: "mushroom",     re: /MUSHROOM/i },
+    { id: "pumpkin",      re: /PUMPKIN/i },
+    { id: "corn",         re: /CORN/i },
+    { id: "potato",       re: /POTATO/i },
+    { id: "wheat",        re: /WHEAT/i },
+    { id: "flowers",      re: /FLOWERS?/i },
+    { id: "eggs",         re: /EGGS?/i },
+    // PVE／モニュメント（"HEAVY SCIENTIST" を "SCIENTIST" より先に）
+    { id: "heavy_scientist",re: /HEAVY\s*SCIENTIST\s*KILLS/i },
+    { id: "scientist_kills",re: /SCIENTIST\s*KILLS/i },
+    { id: "bradley_kills",  re: /BRADLEY\s*KILLS/i },
+    { id: "heli_kills",     re: /(?:ATTACK\s*)?HELI\s*KILLS/i },
+    // レイド（"HV ROCKETS" を先に食わせて、通常ロケットと取り違えないようにする。_で始まるidは出力から無視）
+    { id: "_hv_rockets",    re: /HV\s*ROCKETS\s*LAUNCHED/i },
+    { id: "rockets",        re: /ROCKETS\s*LAUNCHED/i },
+    { id: "c4_thrown",      re: /C4\s*THROWN/i },
+    { id: "satchels",       re: /SATCHELS?\s*THROWN/i },
+    // 建築
+    { id: "blocks_placed",  re: /BLOCKS\s*PLACED/i },
+    { id: "blocks_upgraded",re: /BLOCKS\s*UPGRADED/i },
+    // ルート
+    { id: "crates_looted",  re: /(?:LOOT\s*)?CRATES?\s*LOOTED/i },
+    { id: "barrels_broken", re: /(?:LOOT\s*)?BARRELS?\s*BROKEN/i },
+    // PVP（汎用KILLSは最後に処理）
+    { id: "headshots",      re: /HEADSHOTS?/i },
+    { id: "bullets_hit",    re: /BULLETS\s*HIT/i },
+    { id: "suicides",       re: /SUICIDES?/i },
+    { id: "deaths",         re: /DEATHS/i },
+    { id: "kills",          re: /\bKILLS\b/i }
+  ];
+  // OCRテキストを行ベースで解析。rustoriaは「ラベル行 → 数値行」または「ラベル 数値」（同一行）なので、
+  // ①同じ行にラベル後の数字があればそれ ②無ければ直後1〜2行の「数字だけの行」を採用。
+  // 取り違え防止に、ラベルとして消費した行・数値として消費した行は再利用しない（HQ METAL ORE を先に処理）。
+  function ocrToInt(s) { var v = parseInt(String(s).replace(/[^\d]/g, ""), 10); return isNaN(v) ? null : v; }
+  // 位置ベース解析：ラベルも数値も画面の並び順（左→右／上→下）で出る前提。
+  // 各ラベルに「その後ろにある未使用の数値」を順に割り当てる。RESOURCES（ラベル→数値の隣接）と
+  // PVP等のグリッド（ラベル群→数値群）の両方に対応する。most-specific（HQ→METAL等）を優先。
+  function labelForLine(line) {
+    for (var q = 0; q < OCR_LABELS.length; q++) { if (OCR_LABELS[q].re.test(line)) return OCR_LABELS[q]; }
+    return null;
+  }
+  function parseResourceOcr(text) {
+    var lines = String(text || "").replace(/\r/g, "\n").split(/\n+/).map(function (s) { return s.trim(); }).filter(Boolean);
+    var labelHits = [], nums = [];
+    for (var i = 0; i < lines.length; i++) {
+      var lb = labelForLine(lines[i]);
+      if (lb) {
+        var same = lines[i].replace(lb.re, " ").match(/\d[\d,]*/); // 同一行に「ラベル 数値」
+        labelHits.push({ id: lb.id, pos: i, same: same ? ocrToInt(same[0]) : null });
+      } else {
+        var only = lines[i].match(/^\D*(\d[\d,]*)\D*$/); // 数字だけの行
+        if (only) nums.push({ v: ocrToInt(only[1]), pos: i });
+      }
+    }
+    var out = {}, usedNum = {};
+    labelHits.forEach(function (h) {
+      if (out[h.id] != null) return;           // 同じラベルが複数出たら最初を採用
+      if (h.same != null) { out[h.id] = h.same; return; }
+      for (var k = 0; k < nums.length; k++) {  // 後ろにある未使用の数値を割り当て
+        if (usedNum[k] || nums[k].pos <= h.pos) continue;
+        out[h.id] = nums[k].v; usedNum[k] = true; break;
+      }
+    });
+    return out;
+  }
+  function inTimeExp(member, teamType) {
+    var rate = teamType === "enemy" ? IN_EXP_PER_HOUR_ENEMY : IN_EXP_PER_HOUR;
+    return Math.floor(memberTotalOnlineMs(member) / 3600000) * rate;
+  }
+  function farmExp(member) { return memberFarmLogs(member).reduce(function (a, l) { return a + farmLogExp(l); }, 0); }
+  function memberExp(member, teamType) { return inTimeExp(member, teamType) + farmExp(member) + achievementExp(member); }
+  function memberLevelInfo(member, teamType) {
+    var exp = memberExp(member, teamType);
+    // レベル上限なし（無制限）。EXPは概ね L^2.45 で増えるので大きなEXPでもループはすぐ収束する。
+    var level = 1;
+    while (level < LEVEL_HARD_CAP && cumulativeExpForLevel(level + 1) <= exp) level++;
+    var curExp = cumulativeExpForLevel(level);
+    var nextExp = cumulativeExpForLevel(level + 1);
+    var progress = nextExp > curExp ? Math.min(1, Math.max(0, (exp - curExp) / (nextExp - curExp))) : 0;
+    var title = LEVEL_TITLES[Math.min(level - 1, LEVEL_TITLES.length - 1)];
+    return {
+      level: level, title: title, rarity: rarityForLevel(level), exp: exp, curExp: curExp, nextExp: nextExp,
+      progress: progress, toNextExp: Math.max(0, nextExp - exp), maxed: false,
+      hours: memberTotalOnlineMs(member) / 3600000, farmExp: farmExp(member),
+      records: memberFarmLogs(member).length
+    };
+  }
+
+  // ===== ファーム記録＝味方のEXPの主軸 =====
+  // 味方メンバーがrustoriaのRESOURCES画面スクショ＋数値で記録する。記録するとEXP獲得→レベルアップ。照合システムは無し。
+  function recordFarm(member, resources, note, dataUrl) {
+    if (!dataUrl) { toast("⚠ スクショを貼ってから記録して"); return; }
+    if (!Array.isArray(member.farmLogs)) member.farmLogs = [];
+    var beforeLv = memberLevelInfo(member, "friend").level;
+    var log = {
+      id: makeId("farm"), ts: Date.now(), resources: resources || {},
+      note: (note || "").slice(0, 120), img: dataUrl
+    };
+    member.farmLogs.unshift(log);
+    saveTeamsState();
+    var gained = farmLogExp(log);
+    var afterLv = memberLevelInfo(member, "friend").level;
+    if (afterLv > beforeLv) {
+      toast("🎉 " + member.name + " が Lv." + afterLv + " にレベルアップ！（+" + fmtInt(gained) + " EXP）");
+    } else {
+      toast("🌾 " + member.name + " のファームを記録（+" + fmtInt(gained) + " EXP）");
+    }
+  }
+  function deleteFarmLog(member, logId) {
+    member.farmLogs = memberFarmLogs(member).filter(function (l) { return l.id !== logId; });
+    saveTeamsState();
+  }
+
+  function openFarmRecordModal(member, team) {
+    var backdrop = document.getElementById("farm-modal-backdrop");
+    var titleEl = document.getElementById("farm-modal-title");
+    var body = document.getElementById("farm-modal-body");
+    if (!backdrop || !titleEl || !body) return;
+    titleEl.textContent = member.name + " のファームを記録";
+    body.innerHTML = "";
+
+    var pendingDataUrl = null;
+    var resInputs = {};
+
+    var intro = document.createElement("div"); intro.className = "farm-file-note";
+    intro.textContent = "数値は手入力できない（嘘防止）。rustoriaの各タブ（RESOURCES／FARMING／PVP／RAIDING等）のスクショを貼ると、AIが数値を読み取って自動入力する。タブごとに順番に貼れば全項目が合算される。";
+
+    var shotLbl = document.createElement("label"); shotLbl.className = "farm-field-lbl"; shotLbl.textContent = "スクショを貼る（AIが自動読み取り・複数タブは順に貼る）";
+    var fileInput = document.createElement("input");
+    fileInput.type = "file"; fileInput.accept = "image/*"; fileInput.className = "farm-file";
+    var ocrStatus = document.createElement("div"); ocrStatus.className = "farm-ocr-status"; ocrStatus.hidden = true;
+    var preview = document.createElement("img"); preview.className = "farm-preview"; preview.hidden = true; preview.alt = "スクショプレビュー";
+    fileInput.addEventListener("change", function () {
+      var f = fileInput.files && fileInput.files[0];
+      if (!f) { pendingDataUrl = null; preview.hidden = true; updateState(); return; }
+      compressImageFile(f).then(function (url) {
+        pendingDataUrl = url; preview.src = url; preview.hidden = false; updateState();
+      }).catch(function () { toast("⚠ 画像の読み込みに失敗した"); });
+      runOcr(f);
+    });
+    function runOcr(file) {
+      if (!window.Tesseract) { ocrStatus.hidden = false; ocrStatus.textContent = "（この環境では自動読み取り不可）"; return; }
+      ocrStatus.hidden = false; ocrStatus.className = "farm-ocr-status"; ocrStatus.textContent = "🔍 スクショから数値を読み取り中…（数秒）";
+      preprocessForOcr(file).then(function (canvas) {
+        return window.Tesseract.recognize(canvas, "eng");
+      }).then(function (res) {
+        var parsed = parseResourceOcr(res && res.data ? res.data.text : "");
+        var n = 0;
+        RESOURCE_TYPES.forEach(function (rt) {
+          if (parsed[rt.id] != null) { resInputs[rt.id].value = parsed[rt.id]; n++; }
+        });
+        updateState();
+        if (n > 0) { ocrStatus.className = "farm-ocr-status ok"; ocrStatus.textContent = "✅ " + n + "項目を自動入力した。別タブのスクショも続けて貼れる。"; }
+        else { ocrStatus.className = "farm-ocr-status warn"; ocrStatus.textContent = "⚠ 数値を読み取れなかった。別タブや鮮明なスクショで試して。"; }
+      }).catch(function () {
+        ocrStatus.className = "farm-ocr-status warn"; ocrStatus.textContent = "⚠ 読み取りに失敗。別のスクショで試して。";
+      });
+    }
+
+    var resLbl = document.createElement("label"); resLbl.className = "farm-field-lbl"; resLbl.textContent = "項目ごとの数値（スクショの数字を入力・空欄は0）。どのタブのスクショでもOK、写っている項目だけ埋めればいい。";
+    var grid = document.createElement("div"); grid.className = "farm-res-wrap";
+    var STAT_GROUP_ORDER = ["資源・農業", "PVP", "モニュメント", "レイド", "建築", "ルート"];
+    var byGroup = {};
+    RESOURCE_TYPES.forEach(function (rt) { var g = rt.grp || "資源・農業"; (byGroup[g] = byGroup[g] || []).push(rt); });
+    STAT_GROUP_ORDER.forEach(function (g) {
+      var items = byGroup[g]; if (!items || !items.length) return;
+      var gh = document.createElement("div"); gh.className = "farm-res-group"; gh.textContent = g;
+      grid.appendChild(gh);
+      var sub = document.createElement("div"); sub.className = "farm-res-grid";
+      items.forEach(function (rt) {
+        var cell = document.createElement("label"); cell.className = "farm-res-cell";
+        var nm = document.createElement("span"); nm.className = "farm-res-name"; nm.textContent = rt.name;
+        var inp = document.createElement("input");
+        inp.type = "text"; inp.className = "farm-res-input"; inp.placeholder = "0";
+        inp.readOnly = true; // 手入力不可。スクショOCRだけが値を入れる。
+        inp.title = rt.exp > 0 ? ("1個あたり " + rt.exp + " EXP（スクショから自動入力）") : "EXPなし・実績称号の対象（スクショから自動入力）";
+        resInputs[rt.id] = inp;
+        cell.appendChild(nm); cell.appendChild(inp);
+        sub.appendChild(cell);
+      });
+      grid.appendChild(sub);
+    });
+
+    var expHint = document.createElement("div"); expHint.className = "farm-exp-hint";
+
+    function collectResources() {
+      var r = {};
+      RESOURCE_TYPES.forEach(function (rt) {
+        var v = Math.max(0, Math.round(Number(resInputs[rt.id].value) || 0));
+        if (v > 0) r[rt.id] = v;
+      });
+      return r;
+    }
+    function updateState() {
+      var base = farmLogBaseExp({ resources: collectResources() });
+      expHint.textContent = "獲得EXP：+" + fmtInt(Math.round(base));
+      saveBtn.disabled = !pendingDataUrl;
+    }
+
+    var saveBtn = document.createElement("button");
+    saveBtn.type = "button"; saveBtn.className = "btn-primary"; saveBtn.textContent = "このスクショで記録する";
+    saveBtn.addEventListener("click", function () {
+      if (!pendingDataUrl) { toast("⚠ スクショを貼ってから記録して"); return; }
+      recordFarm(member, collectResources(), "", pendingDataUrl);
+      backdrop.hidden = true;
+      renderTeamsList();
+      if (!document.getElementById("trend-modal-backdrop").hidden) openTrendModal(member, team);
+    });
+
+    body.appendChild(intro);
+    body.appendChild(shotLbl); body.appendChild(fileInput); body.appendChild(ocrStatus); body.appendChild(preview);
+    body.appendChild(resLbl); body.appendChild(grid);
+    body.appendChild(expHint);
+    body.appendChild(saveBtn);
+    updateState();
+    backdrop.hidden = false;
+  }
+
+  // 所持称号：Lv1〜現在Lvで解放済みの称号を一覧（レアリティ色つき・現在の称号を強調）。
+  function buildOwnedTitlesSection(level) {
+    var wrap = document.createElement("div");
+    wrap.className = "owned-titles";
+    var maxShown = Math.min(level, LEVEL_TITLES.length);
+    var t = document.createElement("div"); t.className = "st-section-title";
+    t.textContent = "所持称号　" + maxShown + " / " + LEVEL_TITLES.length;
+    wrap.appendChild(t);
+    var chips = document.createElement("div"); chips.className = "title-chips";
+    for (var lv = 1; lv <= maxShown; lv++) {
+      var rc = rarityForLevel(lv);
+      var chip = document.createElement("span");
+      chip.className = "title-chip" + (lv === level ? " current" : "");
+      chip.style.borderColor = rc.color;
+      chip.style.color = rc.color;
+      chip.textContent = "Lv." + lv + " " + LEVEL_TITLES[lv - 1];
+      chip.title = rc.label;
+      chips.appendChild(chip);
+    }
+    wrap.appendChild(chips);
+    return wrap;
+  }
+
+  // 獲得称号（ファーム等の実績）＝レベル称号とは別軸。獲得済みの称号だけをレアリティ順（レアが上）に並べる。
+  var RARITY_ORDER = {};
+  RARITIES.forEach(function (r, i) { RARITY_ORDER[r.key] = i; });
+  function buildAchievementsSection(member) {
+    var wrap = document.createElement("div");
+    wrap.className = "ach-section";
+    // 獲得済みtierを全部集める
+    var earned = [];
+    ACHIEVEMENTS.forEach(function (cat) {
+      var total = achievementStatValue(member, cat);
+      cat.tiers.forEach(function (ti) { if (total >= ti.th) earned.push({ n: ti.n, rk: ti.rk, cat: cat.cat }); });
+    });
+    // レアリティ順（レアが先）→同レアはカテゴリ名
+    earned.sort(function (a, b) {
+      var d = (RARITY_ORDER[b.rk] || 0) - (RARITY_ORDER[a.rk] || 0);
+      return d !== 0 ? d : a.cat.localeCompare(b.cat);
+    });
+
+    var t = document.createElement("div"); t.className = "st-section-title";
+    t.textContent = "獲得称号（ファーム実績）　" + earned.length + "個";
+    wrap.appendChild(t);
+
+    if (!earned.length) {
+      var em = document.createElement("div"); em.className = "empty-note";
+      em.textContent = "まだ実績称号なし。ファームを記録して資源を貯めると獲得できる。";
+      wrap.appendChild(em);
+      return wrap;
+    }
+
+    var chips = document.createElement("div"); chips.className = "ach-earned-chips";
+    earned.forEach(function (e) {
+      var rc = rarityByKey(e.rk);
+      var chip = document.createElement("span"); chip.className = "ach-chip";
+      chip.style.color = rc.color; chip.style.borderColor = rc.color;
+      chip.textContent = e.n;
+      chip.title = e.cat + "／" + rc.label + "（+" + fmtInt(rarityExp(e.rk)) + " EXP）";
+      chips.appendChild(chip);
+    });
+    wrap.appendChild(chips);
+    return wrap;
+  }
+
+  // ステータス画面内のファーム記録セクション（履歴＋削除）
+  function buildFarmSection(member, team) {
+    var wrap = document.createElement("div");
+    wrap.className = "farm-section";
+
+    var t = document.createElement("div"); t.className = "st-section-title"; t.textContent = "ファーム記録";
+    wrap.appendChild(t);
+
+    var logs = memberFarmLogs(member);
+    if (!logs.length) {
+      var em = document.createElement("div"); em.className = "empty-note";
+      em.textContent = "まだ記録がない。ファーム数をスクショ付きで記録するとEXPが貯まる。";
+      wrap.appendChild(em);
+      return wrap;
+    }
+
+    var list = document.createElement("div"); list.className = "farm-log-list";
+    logs.forEach(function (log) {
+      var item = document.createElement("div"); item.className = "farm-log";
+      if (log.img) {
+        var thumb = document.createElement("img"); thumb.className = "farm-log-thumb"; thumb.src = log.img; thumb.alt = "スクショ";
+        thumb.addEventListener("click", function () { window.open(log.img, "_blank", "noopener"); });
+        item.appendChild(thumb);
+      } else {
+        var noimg = document.createElement("div"); noimg.className = "farm-log-noimg"; noimg.textContent = "画像なし";
+        item.appendChild(noimg);
+      }
+      var mid = document.createElement("div"); mid.className = "farm-log-mid";
+      mid.innerHTML =
+        '<div class="farm-log-amt">' + escapeHtml(fmtDateShort(log.ts)) + '　<span class="farm-log-exp">+' + farmLogExp(log) + ' EXP</span></div>' +
+        '<div class="farm-log-meta">' + escapeHtml(farmLogResourceSummary(log) || "資源データなし") + (log.note ? ('　·　' + escapeHtml(log.note)) : '') + '</div>';
+      item.appendChild(mid);
+
+      var actions = document.createElement("div"); actions.className = "farm-log-actions";
+      var dBtn = document.createElement("button");
+      dBtn.type = "button"; dBtn.className = "del"; dBtn.textContent = "×"; dBtn.setAttribute("aria-label", "この記録を削除");
+      dBtn.addEventListener("click", function () {
+        if (!window.confirm("この記録を削除する？（EXPも減る）")) return;
+        deleteFarmLog(member, log.id);
+        renderTeamsList();
+        openTrendModal(member, team);
+      });
+      actions.appendChild(dBtn);
+      item.appendChild(actions);
+      list.appendChild(item);
+    });
+    wrap.appendChild(list);
+    return wrap;
+  }
+
+  function memberStreak(member) {
+    var s = Array.isArray(member.sessions) ? member.sessions : [];
+    var days = {};
+    function key(d) { return d.getFullYear() + "-" + d.getMonth() + "-" + d.getDate(); }
+    s.forEach(function (x) { if (x && typeof x.start === "number") days[key(new Date(x.start))] = true; });
+    var cur = new Date();
+    if (!days[key(cur)]) { cur.setDate(cur.getDate() - 1); if (!days[key(cur)]) return 0; }
+    var streak = 0;
+    while (days[key(cur)]) { streak++; cur.setDate(cur.getDate() - 1); }
+    return streak;
+  }
+  function timeTypeTitle(buckets) {
+    var total = buckets.reduce(function (a, b) { return a + b; }, 0);
+    if (total < 3) return "（データ不足）";
+    var bands = [0, 0, 0, 0];
+    buckets.forEach(function (c, h) { bands[Math.floor(h / 6)] += c; });
+    var max = Math.max.apply(null, bands);
+    if (max / total < 0.4) return "監視者（オールタイム）";
+    return ["梟（深夜型）", "早起き（朝型）", "勤め人（昼型）", "夜行（夜型）"][bands.indexOf(max)];
+  }
+  function formatHoursShort(hours) {
+    if (hours < 1) return Math.round(hours * 60) + "分";
+    if (hours < 10) return (Math.round(hours * 10) / 10) + "時間";
+    return Math.round(hours) + "時間";
+  }
+
   function resolveTeamAccentColor(teamType) {
     var varName = teamType === "friend" ? "--moss" : "--alert";
     var val = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
@@ -2100,58 +3226,53 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     rect.addEventListener("mouseleave", hideTrendTooltip);
   }
 
+  // 24時間ヒートストリップ＋「よくINする時間帯」サマリー（棒グラフから作り替え・一目で分かる）。
   function buildTrendChartSvg(buckets, color) {
-    var width = 480, barAreaHeight = 110, topPad = 10, labelHeight = 26;
-    var height = topPad + barAreaHeight + labelHeight;
-    var barSlot = width / 24;
-    var barWidth = Math.max(2, barSlot - 6);
-    var baselineY = topPad + barAreaHeight;
-    var maxCount = Math.max.apply(null, buckets.concat([1]));
+    var max = Math.max.apply(null, buckets.concat([1]));
+    var total = buckets.reduce(function (a, b) { return a + b; }, 0);
+    var wrap = document.createElement("div");
+    wrap.className = "trend-heat";
 
-    var svg = document.createElementNS(SVG_NS, "svg");
-    svg.setAttribute("viewBox", "0 0 " + width + " " + height);
-    svg.setAttribute("width", "100%");
-    svg.setAttribute("role", "img");
-    svg.setAttribute("aria-label", "時間帯別ログイン回数の棒グラフ");
-
-    var baseline = document.createElementNS(SVG_NS, "line");
-    baseline.setAttribute("class", "trend-baseline");
-    baseline.setAttribute("x1", "0");
-    baseline.setAttribute("y1", String(baselineY));
-    baseline.setAttribute("x2", String(width));
-    baseline.setAttribute("y2", String(baselineY));
-    svg.appendChild(baseline);
-
-    for (var hour = 0; hour < 24; hour++) {
-      var count = buckets[hour] || 0;
-      var barHeight = maxCount > 0 ? (count / maxCount) * barAreaHeight : 0;
-      var x = hour * barSlot + (barSlot - barWidth) / 2;
-      var y = baselineY - barHeight;
-      var rect = document.createElementNS(SVG_NS, "rect");
-      rect.setAttribute("class", "trend-bar");
-      rect.setAttribute("data-hour", String(hour));
-      rect.setAttribute("data-count", String(count));
-      rect.setAttribute("x", String(x));
-      rect.setAttribute("y", String(y));
-      rect.setAttribute("width", String(barWidth));
-      rect.setAttribute("height", String(barHeight));
-      rect.setAttribute("rx", "2");
-      rect.setAttribute("fill", color);
-      attachTrendBarHover(rect, hour, count);
-      svg.appendChild(rect);
-
-      if (TREND_SPARSE_HOURS.indexOf(hour) !== -1) {
-        var label = document.createElementNS(SVG_NS, "text");
-        label.setAttribute("class", "trend-hour-label");
-        label.setAttribute("x", String(hour * barSlot + barSlot / 2));
-        label.setAttribute("y", String(baselineY + 16));
-        label.setAttribute("text-anchor", "middle");
-        label.textContent = String(hour);
-        svg.appendChild(label);
+    var strip = document.createElement("div");
+    strip.className = "th-strip";
+    for (var h = 0; h < 24; h++) {
+      var c = buckets[h] || 0;
+      var cell = document.createElement("div");
+      cell.className = "th-cell" + (c > 0 ? " has" : "");
+      if (c > 0) {
+        var intensity = max > 0 ? (c / max) : 0;
+        cell.style.background = "rgba(143,185,110," + (0.22 + intensity * 0.68).toFixed(2) + ")";
+        var cnt = document.createElement("span"); cnt.className = "th-count"; cnt.textContent = c; cell.appendChild(cnt);
       }
+      cell.title = h + "時台：" + c + "回観測";
+      strip.appendChild(cell);
     }
+    wrap.appendChild(strip);
 
-    return svg;
+    var labels = document.createElement("div");
+    labels.className = "th-labels";
+    for (var lh = 0; lh < 24; lh++) {
+      var sp = document.createElement("span");
+      sp.style.gridColumnStart = String(lh + 1);
+      sp.textContent = (lh % 6 === 0) ? (lh + "時") : (lh === 23 ? "23時" : "");
+      labels.appendChild(sp);
+    }
+    wrap.appendChild(labels);
+
+    var sm = document.createElement("div");
+    sm.className = "th-summary";
+    if (total === 0) {
+      sm.textContent = "まだ観測データがない。";
+    } else {
+      var bestStart = 0, bestSum = -1;
+      for (var i = 0; i < 24; i++) {
+        var s = (buckets[i] || 0) + (buckets[(i + 1) % 24] || 0) + (buckets[(i + 2) % 24] || 0);
+        if (s > bestSum) { bestSum = s; bestStart = i; }
+      }
+      sm.innerHTML = "よくINする時間帯　<b>" + bestStart + "〜" + ((bestStart + 3) % 24) + "時</b>　（観測 " + total + "回）";
+    }
+    wrap.appendChild(sm);
+    return wrap;
   }
 
   function openTrendModal(member, team) {
@@ -2164,13 +3285,53 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     var sessions = Array.isArray(member.sessions) ? member.sessions : [];
     var buckets = computeHourlyBuckets(sessions);
     var color = resolveTeamAccentColor(team.type);
+    var info = memberLevelInfo(member, team.type);
+    var streak = memberStreak(member);
+    var ttype = timeTypeTitle(buckets);
+    var rc = info.rarity;
 
-    titleEl.textContent = member.name + "さんのログイン傾向（時間帯別）";
+    titleEl.textContent = member.name + " のステータス";
     chartWrap.innerHTML = "";
+
+    var barLabel = "次のLvまで あと " + fmtInt(info.toNextExp) + " EXP";
+    var status = document.createElement("div");
+    status.className = "status-box";
+    status.innerHTML =
+      '<div class="st-top">' +
+        '<div class="st-lv">' +
+          '<span class="st-lv-num">Lv.' + info.level + '</span>' +
+          '<span class="st-title">' + escapeHtml(info.title) + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="st-bar"><div class="st-bar-fill" style="width:' + Math.round(info.progress * 100) + '%"></div></div>' +
+      '<div class="st-bar-label">' + escapeHtml(barLabel) + '　<span class="st-exp">累計 ' + fmtInt(info.exp) + ' EXP</span></div>' +
+      '<div class="st-stats">' +
+        '<div class="st-stat"><span class="st-stat-lbl">ファーム記録</span><span class="st-stat-val">' + info.records + '回</span></div>' +
+        '<div class="st-stat"><span class="st-stat-lbl">ファームEXP</span><span class="st-stat-val">' + fmtInt(info.farmExp) + '</span></div>' +
+        '<div class="st-stat"><span class="st-stat-lbl">Rust IN時間</span><span class="st-stat-val">' + escapeHtml(formatHoursShort(info.hours)) + '</span></div>' +
+        '<div class="st-stat"><span class="st-stat-lbl">サイト稼働</span><span class="st-stat-val">' + escapeHtml(formatHoursShort(siteOpenHours())) + '</span></div>' +
+        '<div class="st-stat"><span class="st-stat-lbl">連続IN</span><span class="st-stat-val">' + (streak > 0 ? ("🔥 " + streak + "日") : "—") + '</span></div>' +
+        '<div class="st-stat"><span class="st-stat-lbl">時間帯タイプ</span><span class="st-stat-val">' + escapeHtml(ttype) + '</span></div>' +
+      '</div>';
+    chartWrap.appendChild(status);
+
+    // 実績称号はファーム由来＝味方だけ。敵は記録できないので出さない。
+    if (team.type === "friend") {
+      chartWrap.appendChild(buildAchievementsSection(member));
+    }
+
+    if (team.type === "friend") {
+      chartWrap.appendChild(buildFarmSection(member, team));
+    }
+
+    var heatTitle = document.createElement("div");
+    heatTitle.className = "st-section-title";
+    heatTitle.textContent = "ログイン傾向（時間帯別）";
+    chartWrap.appendChild(heatTitle);
     chartWrap.appendChild(buildTrendChartSvg(buckets, color));
 
     if (sessions.length < 5) {
-      noteEl.textContent = "まだデータが少ない（観測 " + sessions.length + "件）。時間が経つほど傾向が見えてくる。";
+      noteEl.textContent = "まだ観測データが少ない（" + sessions.length + "件）。長く監視するほどLv・傾向が育つ。";
       noteEl.hidden = false;
     } else {
       noteEl.textContent = "";
@@ -2187,8 +3348,15 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     if (backdrop) backdrop.addEventListener("click", function (e) { if (e.target === backdrop) { backdrop.hidden = true; hideTrendTooltip(); } });
   })();
 
-  // 味方チーム＝クラン名＋「ファーム数を見る」ボタンだけのコンパクト表示（メンバー行・オンライン監視なし）。
-  // 敵バーの上に固定表示する。敵チームの本格監視はrenderTeamsList側（下段）。
+  (function wireFarmModal() {
+    var backdrop = document.getElementById("farm-modal-backdrop");
+    var closeBtn = document.getElementById("farm-modal-close-btn");
+    if (closeBtn) closeBtn.addEventListener("click", function () { backdrop.hidden = true; });
+    if (backdrop) backdrop.addEventListener("click", function (e) { if (e.target === backdrop) backdrop.hidden = true; });
+  })();
+
+  // 味方チーム＝コンパクト表示（敵のフルカードは流用しない）。クラン名＋ファーム数を見る＋
+  // シンプルなメンバー一覧（名前・オンライン・IN時間/最終確認）＋名前追加のみ。横幅いっぱいに使う。
   function renderFriendTeams() {
     var container = document.getElementById("friend-cards");
     var section = document.getElementById("friend-section");
@@ -2197,46 +3365,126 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     if (section) section.style.display = friends.length ? "" : "none";
     container.innerHTML = "";
     friends.forEach(function (team) {
+      if (!Array.isArray(team.members)) team.members = [];
       var card = document.createElement("div");
-      card.className = "team-card friend-compact";
+      card.className = "team-card friend-card";
       card.dataset.teamId = team.id;
       card.dataset.teamType = "friend";
+
       var top = document.createElement("div");
       top.className = "team-card-top";
-      var typeBtn = document.createElement("button");
-      typeBtn.type = "button";
-      typeBtn.className = "type-toggle friend";
-      typeBtn.textContent = "🟢 味方";
-      typeBtn.title = "クリックで敵チーム（監視対象）に切替";
-      typeBtn.addEventListener("click", function () { team.type = "enemy"; saveTeamsState(); renderTeamsList(); });
       var nameInput = document.createElement("input");
-      nameInput.type = "text";
-      nameInput.value = team.name;
-      nameInput.dataset.field = "team-name";
+      nameInput.type = "text"; nameInput.value = team.name; nameInput.dataset.field = "team-name";
       nameInput.setAttribute("aria-label", "クラン名");
       nameInput.addEventListener("change", function () { team.name = nameInput.value.trim() || team.name; nameInput.value = team.name; saveTeamsState(); });
+      var onlineCount = team.members.filter(function (m) { return m.online === true; }).length;
+      var countBadge = document.createElement("span");
+      countBadge.className = "badge team-count" + (onlineCount > 0 ? " has-online" : "");
+      countBadge.textContent = onlineCount + "/" + team.members.length + " IN";
       var farmBtn = document.createElement("button");
-      farmBtn.type = "button";
-      farmBtn.className = "btn-ghost";
-      farmBtn.textContent = "🌾 ファーム数を見る";
-      farmBtn.title = "rustoria.coでこのサーバーのファームランキングを開く";
-      farmBtn.addEventListener("click", function () { openRustoriaTeamFarm(); });
-      var delBtn = document.createElement("button");
-      delBtn.type = "button";
-      delBtn.className = "del";
-      delBtn.setAttribute("aria-label", team.name + " を削除");
-      delBtn.textContent = "×";
-      delBtn.addEventListener("click", function () {
+      farmBtn.type = "button"; farmBtn.className = "btn-ghost"; farmBtn.textContent = "🌾 ファーム数を見る";
+      farmBtn.title = "rustoria.coのこのクランのファームページを開く";
+      farmBtn.addEventListener("click", function () { openRustoriaTeamFarm(team); });
+      var delTeamBtn = document.createElement("button");
+      delTeamBtn.type = "button"; delTeamBtn.className = "del"; delTeamBtn.textContent = "×";
+      delTeamBtn.setAttribute("aria-label", team.name + " を削除");
+      delTeamBtn.addEventListener("click", function () {
         if (!window.confirm(team.name + " を削除する？")) return;
         teamsState.teams = teamsState.teams.filter(function (x) { return x.id !== team.id; });
-        saveTeamsState();
-        renderTeamsList();
+        saveTeamsState(); renderTeamsList();
       });
-      top.appendChild(typeBtn);
-      top.appendChild(nameInput);
-      top.appendChild(farmBtn);
-      top.appendChild(delBtn);
+      top.appendChild(nameInput); top.appendChild(countBadge);
+      top.appendChild(farmBtn); top.appendChild(delTeamBtn);
       card.appendChild(top);
+
+      var membersWrap = document.createElement("div");
+      membersWrap.className = "friend-members";
+      if (!team.members.length) {
+        var em = document.createElement("div"); em.className = "empty-note"; em.textContent = "下からメンバー（味方の名前）を追加してください。";
+        membersWrap.appendChild(em);
+      }
+      sortMembersForDisplay(team.members).forEach(function (member) {
+        var row = document.createElement("div");
+        row.className = "friend-member-row"; row.dataset.memberId = member.id;
+        var lvInfo = memberLevelInfo(member, "friend");
+        var lvBadge = document.createElement("span");
+        lvBadge.className = "fm-lv"; lvBadge.textContent = "Lv." + lvInfo.level;
+        lvBadge.title = lvInfo.title;
+        var fmTitle = document.createElement("span");
+        fmTitle.className = "fm-title"; fmTitle.textContent = lvInfo.title;
+        // 名前＝クリックでSteamプロフィールを開く（未設定ならその場で設定）
+        var nm = document.createElement("span");
+        nm.className = "fm-name fm-name-link" + (member.online === true ? " is-online" : member.online === false ? " is-offline" : "");
+        nm.textContent = member.name;
+        nm.title = member.steamId ? "クリックでSteamプロフィールを開く" : "クリックでSteam ID / URLを設定";
+        nm.addEventListener("click", function () {
+          if (member.steamId) { var u = steamProfileUrl(member.steamId); if (u) window.open(u, "_blank", "noopener"); return; }
+          var input = window.prompt(member.name + " のSteamプロフィールURL、またはSteam ID（17桁前後）を貼ってください。\n設定すると、以降は名前クリックでプロフィールを開けます。\n例: https://steamcommunity.com/profiles/7656119…");
+          if (!input) return;
+          var p = parseSteamInput(input);
+          var sid = p ? p.steamId : String(input).trim();
+          if (!sid) { toast("⚠ Steam ID を認識できなかった"); return; }
+          member.steamId = sid; saveTeamsState(); renderTeamsList();
+          toast("🔗 " + member.name + " にSteamを設定した（名前クリックで開ける）");
+        });
+        // 名前（ニックネーム）変更ボタン
+        var renameBtn = document.createElement("button");
+        renameBtn.type = "button"; renameBtn.className = "fm-rename-btn"; renameBtn.textContent = "✏️";
+        renameBtn.title = member.name + " の名前（ニックネーム）を変更";
+        renameBtn.addEventListener("click", function () {
+          var v = window.prompt("新しい名前（ニックネーム）を入力", member.name);
+          if (v === null) return;
+          v = v.trim(); if (!v) return;
+          member.name = v; saveTeamsState(); renderTeamsList(); refreshTeamStatuses();
+        });
+        var lastSeenEl = document.createElement("span");
+        lastSeenEl.className = "last-seen" + (member.online === true ? " is-in" : "");
+        updateLastSeenEl(lastSeenEl, member);
+        var farmRecBtn = document.createElement("button");
+        farmRecBtn.type = "button"; farmRecBtn.className = "farm-rec-btn"; farmRecBtn.textContent = "🌾 記録";
+        farmRecBtn.title = member.name + " のファーム数を記録（スクショ照合つき・EXP獲得）";
+        farmRecBtn.addEventListener("click", function () { openFarmRecordModal(member, team); });
+        var trendBtn = document.createElement("button");
+        trendBtn.type = "button"; trendBtn.className = "trend-btn"; trendBtn.textContent = "📊 ステータス";
+        trendBtn.setAttribute("aria-label", member.name + " のステータス");
+        trendBtn.addEventListener("click", function () { openTrendModal(member, team); });
+        var delM = document.createElement("button");
+        delM.type = "button"; delM.className = "del"; delM.textContent = "×"; delM.setAttribute("aria-label", member.name + " を削除");
+        delM.addEventListener("click", function () {
+          team.members = team.members.filter(function (x) { return x.id !== member.id; });
+          saveTeamsState(); renderTeamsList();
+        });
+        row.appendChild(lvBadge); row.appendChild(nm); row.appendChild(renameBtn); row.appendChild(fmTitle); row.appendChild(lastSeenEl);
+        row.appendChild(farmRecBtn); row.appendChild(trendBtn); row.appendChild(delM);
+        membersWrap.appendChild(row);
+      });
+      card.appendChild(membersWrap);
+
+      var addRow = document.createElement("div");
+      addRow.className = "friend-add-row";
+      var addInput = document.createElement("input");
+      addInput.type = "text"; addInput.placeholder = "味方の名前（ゲーム内名・任意）";
+      var addSid = document.createElement("input");
+      addSid.type = "text"; addSid.className = "fm-steamid"; addSid.placeholder = "Steam ID / プロフィールURL（任意）";
+      var addBtn = document.createElement("button");
+      addBtn.type = "button"; addBtn.className = "btn-ghost"; addBtn.textContent = "＋ 追加";
+      function doAddMember() {
+        var v = addInput.value.trim();
+        var sidRaw = addSid.value.trim();
+        if (!v && !sidRaw) { toast("⚠ 名前かSteam IDのどちらかを入れて"); return; }
+        var steamId = "", display = "";
+        if (sidRaw) { var p = parseSteamInput(sidRaw); if (p) { steamId = p.steamId; display = p.display; } else { steamId = sidRaw; } }
+        var name = v || display || (steamId ? "名無し（Steam）" : "");
+        if (!name) return;
+        team.members.push({ id: makeId("member"), name: name, partial: true, online: null, lastOnlineAt: null, bmId: null, steamId: steamId, sessions: [], farmLogs: [] });
+        addInput.value = ""; addSid.value = ""; saveTeamsState(); renderTeamsList(); refreshTeamStatuses();
+      }
+      addBtn.addEventListener("click", doAddMember);
+      addInput.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); doAddMember(); } });
+      addSid.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); doAddMember(); } });
+      addRow.appendChild(addInput); addRow.appendChild(addSid); addRow.appendChild(addBtn);
+      card.appendChild(addRow);
+
       container.appendChild(card);
     });
   }
@@ -2270,7 +3518,6 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       note.className = "empty-note";
       note.textContent = "登録済みの敵チームがない。上の「＋ チーム追加」から登録できる。";
       container.appendChild(note);
-      return;
     }
 
     enemyTeams.forEach(function (team) {
@@ -2355,6 +3602,15 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       top.appendChild(nameInput);
       top.appendChild(typeBtn);
       top.appendChild(countBadge);
+      if (team.type === "friend") {
+        var clanFarmBtn = document.createElement("button");
+        clanFarmBtn.type = "button";
+        clanFarmBtn.className = "btn-ghost";
+        clanFarmBtn.textContent = "🌾 ファーム数を見る";
+        clanFarmBtn.title = "rustoria.coのこのクランのファームページを開く";
+        clanFarmBtn.addEventListener("click", function () { openRustoriaTeamFarm(team); });
+        top.appendChild(clanFarmBtn);
+      }
       top.appendChild(moveUpBtn);
       top.appendChild(moveDownBtn);
       top.appendChild(delTeamBtn);
@@ -2441,23 +3697,19 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
         lastSeenEl.className = "last-seen";
         updateLastSeenEl(lastSeenEl, member);
 
+        var eLvInfo = memberLevelInfo(member, "enemy");
+        var eLvBadge = document.createElement("span");
+        eLvBadge.className = "fm-lv"; eLvBadge.textContent = "Lv." + eLvInfo.level;
+        eLvBadge.title = eLvInfo.title;
+        var eTitle = document.createElement("span");
+        eTitle.className = "fm-title"; eTitle.textContent = eLvInfo.title;
+
         var trendBtn = document.createElement("button");
         trendBtn.type = "button";
         trendBtn.className = "trend-btn";
-        trendBtn.textContent = "📊 傾向を見る";
-        trendBtn.setAttribute("aria-label", member.name + " のログイン傾向を見る");
+        trendBtn.textContent = "📊 ステータス";
+        trendBtn.setAttribute("aria-label", member.name + " のステータス");
         trendBtn.addEventListener("click", function () { openTrendModal(member, team); });
-
-        // 味方チームのメンバーだけ、rustoria.coでファーム数を見るジャンプボタンを出す
-        var farmBtn = null;
-        if (team.type === "friend") {
-          farmBtn = document.createElement("button");
-          farmBtn.type = "button";
-          farmBtn.className = "trend-btn";
-          farmBtn.textContent = "📊 スタッツを見る";
-          farmBtn.title = "rustoria.coでこの人の全スタッツ（プロフィール＝ファーム/キル等のカード画面）を新しいタブで開く";
-          farmBtn.addEventListener("click", function () { openRustoriaProfile(member); });
-        }
 
         var linkBtn = null;
         var linkWidget = null;
@@ -2518,14 +3770,15 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
           renderTeamsList();
         });
 
+        row.appendChild(eLvBadge);
         row.appendChild(mNameInput);
+        row.appendChild(eTitle);
         row.appendChild(steamIdInput);
         if (steamLink) row.appendChild(steamLink);
         row.appendChild(partialLabel);
         row.appendChild(pill);
         row.appendChild(lastSeenEl);
         row.appendChild(trendBtn);
-        if (farmBtn) row.appendChild(farmBtn);
         if (linkBtn) row.appendChild(linkBtn);
         if (unlinkBtn) row.appendChild(unlinkBtn);
         row.appendChild(delMemberBtn);
@@ -2566,38 +3819,6 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
         onManualSubmit: function (name, steamRaw) { addMemberWithName(name, null, steamRaw); }
       });
       card.appendChild(addWidget.wrap);
-
-      var bulkRow = document.createElement("div");
-      bulkRow.className = "bulk-add-row";
-      var bulkTextarea = document.createElement("textarea");
-      bulkTextarea.rows = 2;
-      bulkTextarea.placeholder = "複数名を改行区切りで貼り付け…";
-      bulkTextarea.setAttribute("aria-label", "複数メンバーを一括追加");
-      var bulkBtn = document.createElement("button");
-      bulkBtn.type = "button";
-      bulkBtn.textContent = "＋ 一括追加";
-      bulkBtn.addEventListener("click", function () {
-        var lines = bulkTextarea.value.split(/\r?\n/).map(function (s) { return s.trim(); }).filter(function (s) { return s.length > 0; });
-        if (lines.length === 0) { bulkTextarea.focus(); return; }
-        var existingLower = team.members.map(function (m) { return m.name.trim().toLowerCase(); });
-        var addedCount = 0;
-        lines.forEach(function (name) {
-          var lower = name.toLowerCase();
-          if (existingLower.indexOf(lower) !== -1) return;
-          existingLower.push(lower);
-          team.members.push({ id: makeId("member"), name: name, partial: false, online: null, lastOnlineAt: null, bmId: null, steamId: "", sessions: [] });
-          addedCount++;
-        });
-        bulkTextarea.value = "";
-        saveTeamsState();
-        renderTeamsList();
-        if (addedCount > 0) { refreshTeamStatuses(); toast(addedCount + "名を一括追加した"); }
-      });
-      bulkRow.appendChild(bulkTextarea);
-      bulkRow.appendChild(bulkBtn);
-      card.appendChild(bulkRow);
-
-      card.appendChild(buildOcrSection(team, addMemberWithName));
 
       card.appendChild(buildPhotosSection(team));
 
@@ -2641,6 +3862,35 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
   document.getElementById("team-add-input").addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); addTeam(); } });
   document.getElementById("teams-refresh-btn").addEventListener("click", function () { refreshTeamStatuses(true); });
 
+  ensureCurrentSeasonMeta();
+  function updateSeasonDisplay() {
+    var s = getSeason();
+    ["season-num", "season-num-modal"].forEach(function (id) { var el = document.getElementById(id); if (el) el.textContent = s; });
+  }
+  updateSeasonDisplay();
+  // シーズン切替はワイプ検出時の自動のみ（手動リセットは廃止）。表示更新のみ resetAllStatsForWipe 内で呼ぶ。
+
+  // 一度きりのシーズン全リセット（テストデータ掃除・社長依頼 2026-07-10）。
+  // Firebase接続後（初回スナップショット適用後）に実行するため少し遅延させ、フラグで二度は走らせない。
+  (function scheduleOneTimeSeasonWipe() {
+    try { if (localStorage.getItem("raidar-season-wiped-2026-07-10") === "1") return; } catch (e) { return; }
+    setTimeout(function () {
+      try {
+        teamsState.teams.forEach(function (t) { (t.members || []).forEach(function (m) { m.seasons = {}; m.sessions = []; m.farmLogs = []; m.online = null; m.lastOnlineAt = null; }); });
+        localStorage.setItem("raidar-season", "1");
+        localStorage.setItem("raidar-season-meta", "{}");
+        localStorage.removeItem("raidar-known-next-wipe");
+        localStorage.setItem("raidar-site-open-seconds", "0");
+        localStorage.setItem("raidar-season-wiped-2026-07-10", "1");
+        ensureCurrentSeasonMeta();
+        saveTeamsState();
+        if (typeof updateSeasonDisplay === "function") updateSeasonDisplay();
+        if (typeof renderTeamsList === "function") renderTeamsList();
+        toast("🧹 シーズンをリセットしました（シーズン1・テストデータ消去）");
+      } catch (e) { /* ignore */ }
+    }, 4000);
+  })();
+
   var beepToggleBtn = document.getElementById("beep-toggle");
   function applyBeepLabel() {
     beepToggleBtn.textContent = soundOn ? "🔊 通知音：ON" : "🔈 通知音：OFF";
@@ -2654,14 +3904,16 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
   var notifBtn = document.getElementById("notif-enable-btn");
   function updateNotifBtnLabel() {
     if (!("Notification" in window)) { notifBtn.textContent = "🔕 通知非対応"; notifBtn.disabled = true; return; }
-    if (Notification.permission === "granted") { notifBtn.textContent = "🔔 デスクトップ通知：有効"; }
+    if (Notification.permission === "granted") { notifBtn.textContent = notifEnabledPref() ? "🔔 デスクトップ通知：ON" : "🔕 デスクトップ通知：OFF"; }
     else if (Notification.permission === "denied") { notifBtn.textContent = "🔕 デスクトップ通知：ブロック済み"; }
     else { notifBtn.textContent = "🔔 デスクトップ通知を有効化"; }
   }
   updateNotifBtnLabel();
   notifBtn.addEventListener("click", function () {
-    if (!("Notification" in window) || Notification.permission !== "default") return;
-    Notification.requestPermission().then(function () { updateNotifBtnLabel(); });
+    if (!("Notification" in window)) return;
+    if (Notification.permission === "granted") { setNotifPref(!notifEnabledPref()); updateNotifBtnLabel(); return; } // 許可済みならON/OFF切替
+    if (Notification.permission === "denied") { toast("ブラウザ設定で通知がブロックされている。ブラウザ側で許可すると使える。"); return; }
+    Notification.requestPermission().then(function () { setNotifPref(true); updateNotifBtnLabel(); });
   });
 
   function bmPlayerId(p) {
@@ -2742,7 +3994,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     try { localStorage.setItem(BM_SERVER_STORAGE_KEY, JSON.stringify({ id: id, name: name })); } catch (e) { /* ignore */ }
     updateServerEyebrow();
     fetchServerInfo();
-    document.getElementById("server-modal-backdrop").hidden = true;
+    // モーダルは閉じない（選択後もサーバー比較・シーズン操作を続けられるように）。閉じるボタンで閉じる。
     toast("🔄 監視サーバーを「" + name + "」に変更した");
     lastKnownOnlineNamesLower = [];
     refreshTeamStatuses();
@@ -2782,22 +4034,37 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     });
   }
 
+  function showServerList(show) {
+    var box = document.getElementById("server-suggest-box");
+    var tog = document.getElementById("server-list-toggle");
+    box.classList.toggle("collapsed", !show);
+    if (tog) tog.textContent = show ? "▾ サーバー一覧を隠す" : "▸ サーバー一覧を表示";
+  }
   document.getElementById("server-switch-btn").addEventListener("click", function () {
     document.getElementById("server-modal-backdrop").hidden = false;
     document.getElementById("server-suggest-box").innerHTML = "";
-    runServerSearch();
+    showServerList(false);        // 初期は一覧を畳む（シーズン欄がすぐ見える）
+    runServerSearch();            // 裏で一覧は用意しておく（「表示」で開く）
   });
-  document.getElementById("server-search-btn").addEventListener("click", runServerSearch);
+  document.getElementById("server-list-toggle").addEventListener("click", function () {
+    var collapsed = document.getElementById("server-suggest-box").classList.contains("collapsed");
+    showServerList(collapsed);
+  });
+  function runServerSearchAndShow() { showServerList(true); runServerSearch(); }
+  document.getElementById("server-search-btn").addEventListener("click", runServerSearchAndShow);
   document.getElementById("server-search-input").addEventListener("keydown", function (e) {
-    if (e.key === "Enter") { e.preventDefault(); runServerSearch(); }
+    if (e.key === "Enter") { e.preventDefault(); runServerSearchAndShow(); }
   });
   document.getElementById("server-modal-close-btn").addEventListener("click", function () {
     document.getElementById("server-modal-backdrop").hidden = true;
   });
+  document.getElementById("server-modal-backdrop").addEventListener("click", function (e) {
+    if (e.target === this) this.hidden = true; // 背景クリックで閉じる
+  });
 
   updateServerEyebrow();
   fetchServerInfo();
-  setInterval(fetchServerInfo, 90000);
+  setInterval(fetchServerInfo, 60000);
 
   /* ---------- session history: login trend tracking ---------- */
   var SESSION_MAX_AGE_MS = 60 * 24 * 60 * 60 * 1000; // 60 days
@@ -3001,30 +4268,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     return true;
   }
 
-  document.getElementById("share-link-btn").addEventListener("click", function () {
-    copyToClipboard(buildShareUrl(), "📤 共有リンクをコピーした");
-  });
-
-  document.getElementById("share-text-btn").addEventListener("click", function () {
-    copyToClipboard(JSON.stringify(buildSharePayload()), "📋 共有テキスト(JSON)をコピーした");
-  });
-
-  var shareImportBox = document.getElementById("share-import-box");
-  document.getElementById("share-import-toggle-btn").addEventListener("click", function () {
-    shareImportBox.hidden = !shareImportBox.hidden;
-  });
-
-  document.getElementById("share-import-btn").addEventListener("click", function () {
-    var textarea = document.getElementById("share-import-textarea");
-    var raw = textarea.value.trim();
-    if (!raw) return;
-    var payload;
-    try { payload = JSON.parse(raw); } catch (e) { toast("⚠ 読み込み失敗：JSON形式が不正"); return; }
-    mergeSharedPayload(payload);
-    textarea.value = "";
-    shareImportBox.hidden = true;
-  });
-
+  // 共有/読み込みボタンは撤去（2026-07-10 社長指示）。URLハッシュ経由の読み込みは残す。
   function tryImportFromHash() {
     var hash = location.hash || "";
     if (hash.indexOf("#share=") !== 0) return;
