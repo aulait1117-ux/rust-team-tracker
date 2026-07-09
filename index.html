@@ -1329,6 +1329,9 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
 
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
   function makeId(prefix) { return prefix + "-" + Math.floor(Math.random() * 1e9) + "-" + Date.now().toString(36); }
+  // オンライン照合用の名前正規化：NFKC（全角/半角・互換文字を統一）＋trim＋小文字化。
+  // 登録名とBattleMetrics側ゲーム内名の全角/半角・大文字小文字のズレによる誤OFF/誤ONを減らす（2026-07-10）。
+  function normName(s) { return String(s == null ? "" : s).normalize("NFKC").trim().toLowerCase(); }
 
   function escapeHtml(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -1784,6 +1787,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
   // 1回のポーリングは通常1リクエスト（オンライン<100人なら1ページ）なので6秒でもBM負荷は軽い。
   var TEAMS_POLL_MIN_MS = 60000;   // 1分ごとに更新（社長指定）
   var TEAMS_POLL_MAX_MS = 300000;  // 429時のバックオフ上限
+  var OFFLINE_CONFIRM_MISSES = 2;  // オンライン→OFFは「2回連続で名簿から外れたら」確定。1回の取りこぼしは許容し、ちらつき由来の誤OFF表示・レベル誤加算・IN通知の乱発を防ぐ（2026-07-10）
   var teamsPollMs = TEAMS_POLL_MIN_MS;
 
   function scheduleNextTeamsRefresh() {
@@ -4206,7 +4210,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     lastTeamsFetchAt = Date.now();
     fetchOnlinePlayerPage(bmPlayersApiUrl(), [], 1, 8)
       .then(function (entries) {
-        var lowerNames = entries.map(function (e) { return e.name.trim().toLowerCase(); });
+        var lowerNames = entries.map(function (e) { return normName(e.name); });
         lastKnownOnlineNamesLower = lowerNames;
         var onlineIdNames = new Map();
         entries.forEach(function (e) { if (e.id) onlineIdNames.set(String(e.id), e.name); });
@@ -4227,7 +4231,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
               } else {
                 // ID一致が取れない（stale/不一致なbmId等）場合は名前照合でも救済する。
                 // ここでの一致は名前ベースのため改名追従（member.nameの上書き）は行わない
-                var mNameFallback = member.name.trim().toLowerCase();
+                var mNameFallback = normName(member.name);
                 if (mNameFallback) {
                   isOnline = member.partial
                     ? lowerNames.some(function (n) { return n.indexOf(mNameFallback) !== -1; })
@@ -4235,17 +4239,31 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
                 }
               }
             } else {
-              var mName = member.name.trim().toLowerCase();
+              var mName = normName(member.name);
               if (mName) {
                 isOnline = member.partial
                   ? lowerNames.some(function (n) { return n.indexOf(mName) !== -1; })
                   : lowerNames.indexOf(mName) !== -1;
               }
             }
-            member.online = isOnline;
-            if (isOnline) member.lastOnlineAt = Date.now();
             if (!Array.isArray(member.sessions)) member.sessions = [];
-            if (wasOnline !== true && isOnline === true) {
+            // ちらつき対策（2026-07-10）：オンライン名簿から1回外れただけでは即OFFにせず、
+            // OFFLINE_CONFIRM_MISSES 回連続で外れて初めてOFF確定。BM側の一時取りこぼしや名前照合の
+            // 一瞬のズレで「即OFF→次のポーリングで再ON」を繰り返し、IN通知の乱発・レベルの細切れ加算・
+            // 誤OFF表示が起きるのを防ぐ。member._miss はローカルのみ（Firebaseへは保存しない）。
+            var effOnline;
+            if (isOnline) {
+              effOnline = true;
+              member._miss = 0;
+            } else if (wasOnline === true) {
+              member._miss = (member._miss || 0) + 1;
+              effOnline = member._miss < OFFLINE_CONFIRM_MISSES; // 1回目の未検出はオンライン維持、規定回数でOFF確定
+            } else {
+              effOnline = false; // もともとOFF/未知
+            }
+            member.online = effOnline;
+            if (isOnline) member.lastOnlineAt = Date.now(); // 実際に名簿で見えたときだけ最終確認時刻を更新
+            if (wasOnline !== true && effOnline === true) {
               // OFF/未知 -> ON。他デバイスが既に記録済み（未クローズのセッションが残っている）ならスキップして重複記録を防ぐ
               var hasUnclosedSession = member.sessions.length > 0 && member.sessions[member.sessions.length - 1].end === null;
               if (!hasUnclosedSession) {
@@ -4253,14 +4271,15 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
                 member.sessions = trimSessions(member.sessions);
                 sessionsChanged = true;
               }
-            } else if (wasOnline === true && isOnline === false) {
+            } else if (wasOnline === true && effOnline === false) {
               var lastSession = member.sessions.length > 0 ? member.sessions[member.sessions.length - 1] : null;
               if (lastSession && lastSession.end === null) {
-                lastSession.end = Date.now();
+                // 最後に実際に見えた時刻で閉じる＝猶予ぶん（未検出だった時間）をプレイ時間に加算しない
+                lastSession.end = (typeof member.lastOnlineAt === "number" ? member.lastOnlineAt : Date.now());
                 sessionsChanged = true;
               }
             }
-            if (wasOnline === false && isOnline === true) {
+            if (wasOnline === false && effOnline === true) {
               transitions.push({ teamName: team.name, memberName: member.name, teamType: team.type });
             }
           });
