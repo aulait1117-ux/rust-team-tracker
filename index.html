@@ -334,10 +334,13 @@
   .status-pill.online { color: var(--moss); border-color: var(--moss); background: rgba(110,161,90,0.08); }
   .status-pill.offline { color: var(--text-faint); border-color: var(--line); }
 
-  .member-add-row { display: flex; gap: 8px; margin-top: 10px; }
+  .member-add-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
   .member-add-row input[type="text"] {
-    flex: 1; background: var(--surface-raised); border: 1px solid var(--line); color: var(--text);
+    flex: 1 1 150px; min-width: 120px; background: var(--surface-raised); border: 1px solid var(--line); color: var(--text);
     font-size: 13px; padding: 7px 9px; border-radius: 3px;
+  }
+  .member-add-row input.steam-add-input {
+    flex: 1 1 220px; font-family: var(--font-mono); font-size: 11.5px;
   }
   .member-add-row input[type="text"]::placeholder { color: var(--text-faint); }
   .member-add-row button {
@@ -807,8 +810,10 @@
       <section>
         <h3>3. メンバー追加</h3>
         <ul>
-          <li>「メンバー名を追加」欄に2文字以上入力すると名前サジェストが出る。候補をクリックするとBattleMetrics IDが自動で紐付き、相手が改名しても追跡できるようになる。</li>
+          <li>「名前」欄に2文字以上入力すると名前サジェストが出る。候補をクリックするとBattleMetrics IDが自動で紐付き、相手が改名しても追跡できるようになる。</li>
           <li>手入力してそのまま「＋ メンバー追加」もできる（この場合IDは未紐付け）。</li>
+          <li><strong>同名が多くて区別できないときは、隣の「Steam ID / プロフィールURL」欄で追加する。</strong>Steam ID（17桁前後の数字）でも、プロフィールのURL（<code>https://steamcommunity.com/profiles/…</code> や <code>…/id/…</code>）を貼り付けてもよい。URLからIDを自動で取り出す。名前を空にしてSteamだけで追加すると、Steamの表示名を仮の名前にする。</li>
+          <li>同じSteam IDは二重登録されない（名前が同じでもSteam IDが違えば別人として追加できる）。</li>
           <li>「複数名を改行区切りで貼り付け」→「＋ 一括追加」で複数人まとめて登録できる。</li>
           <li>「部分一致」にチェックを入れると、名前の一部が含まれているだけでオンライン判定される。</li>
           <li>後から「🔗 ID紐付け」ボタンでも、手入力済みのメンバーにBattleMetrics IDを紐付けられる。</li>
@@ -915,6 +920,28 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     if (!s) return null;
     if (/^https?:\/\//i.test(s)) return s;
     if (/^\d{6,20}$/.test(s)) return "https://steamcommunity.com/profiles/" + s;
+    return null;
+  }
+
+  // Steam の識別子を1本の入力欄から受け取れるようにする。
+  // SteamID64（17桁前後の数字）／プロフィールURL（/profiles/<id64> または /id/<vanity>）／
+  // 素のvanityを受け付け、{ steamId, display } を返す（解釈できなければ null）。
+  // steamId には member に保存する値（数値ID または 正規化したプロフィールURL）を入れる。
+  // display は名前が空のときに使う表示名の候補。steamProfileUrl() はどちらの形式でもリンク化できる。
+  function parseSteamInput(raw) {
+    if (raw == null) return null;
+    var s = String(raw).trim().replace(/^[<"'\s]+|[>"'\s]+$/g, "");
+    if (!s) return null;
+    var mProf = s.match(/steamcommunity\.com\/profiles\/(\d{6,20})/i);
+    if (mProf) return { steamId: mProf[1], display: "Steam:" + mProf[1].slice(-4) };
+    var mVan = s.match(/steamcommunity\.com\/id\/([^\/?#\s]+)/i);
+    if (mVan) {
+      var vanity = "";
+      try { vanity = decodeURIComponent(mVan[1]); } catch (e) { vanity = mVan[1]; }
+      return { steamId: "https://steamcommunity.com/id/" + vanity + "/", display: vanity };
+    }
+    if (/^\d{6,20}$/.test(s)) return { steamId: s, display: "Steam:" + s.slice(-4) };
+    if (/^https?:\/\//i.test(s)) return { steamId: s, display: s.replace(/^https?:\/\/(www\.)?/i, "").slice(0, 24) };
     return null;
   }
 
@@ -1396,6 +1423,26 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     input.setAttribute("aria-label", config.ariaLabel || "検索");
     input.setAttribute("autocomplete", "off");
 
+    // 任意の第2入力欄（メンバー追加時のSteam ID／プロフィールURL）。指定時のみ作る。
+    var extraInput = null;
+    if (config.secondInput) {
+      extraInput = document.createElement("input");
+      extraInput.type = "text";
+      extraInput.className = "steam-add-input";
+      extraInput.placeholder = config.secondInput.placeholder || "";
+      extraInput.setAttribute("aria-label", config.secondInput.ariaLabel || "");
+      extraInput.setAttribute("autocomplete", "off");
+    }
+    function getExtra() { return extraInput ? extraInput.value.trim() : ""; }
+    function doManualSubmit() {
+      var nm = input.value.trim();
+      var ex = getExtra();
+      if (config.secondInput) {
+        if (!nm && !ex) { input.focus(); return; }   // 名前かSteamのどちらかがあればOK
+      } else if (!nm) { input.focus(); return; }
+      if (config.onManualSubmit) config.onManualSubmit(nm, ex);
+    }
+
     var suggestBox = document.createElement("div");
     suggestBox.className = "suggest-box";
     suggestBox.hidden = true;
@@ -1453,7 +1500,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
         item.addEventListener("mousedown", function (e) {
           e.preventDefault();
           hide();
-          config.onPick(playerItem.name, playerItem.id);
+          config.onPick(playerItem.name, playerItem.id, getExtra());
         });
         suggestBox.appendChild(item);
       });
@@ -1496,11 +1543,9 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
         if (!suggestBox.hidden && activeSuggestIndex >= 0 && suggestItems[activeSuggestIndex]) {
           var picked = suggestItems[activeSuggestIndex];
           hide();
-          config.onPick(picked.name, picked.id);
+          config.onPick(picked.name, picked.id, getExtra());
         } else if (config.onManualSubmit) {
-          var name = input.value.trim();
-          if (name) { hide(); config.onManualSubmit(name); }
-          else input.focus();
+          hide(); doManualSubmit();
         }
         return;
       }
@@ -1511,15 +1556,17 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     });
 
     row.appendChild(input);
+    if (extraInput) {
+      extraInput.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") { e.preventDefault(); doManualSubmit(); }
+      });
+      row.appendChild(extraInput);
+    }
     if (config.buttonText) {
       var btn = document.createElement("button");
       btn.type = "button";
       btn.textContent = config.buttonText;
-      btn.addEventListener("click", function () {
-        var name = input.value.trim();
-        if (!name) { input.focus(); return; }
-        if (config.onManualSubmit) config.onManualSubmit(name);
-      });
+      btn.addEventListener("click", function () { doManualSubmit(); });
       row.appendChild(btn);
     }
 
@@ -2154,11 +2201,12 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
         steamIdInput.type = "text";
         steamIdInput.className = "steamid-input";
         steamIdInput.value = member.steamId || "";
-        steamIdInput.placeholder = "Steam ID（任意）";
+        steamIdInput.placeholder = "Steam ID / URL（任意）";
         steamIdInput.setAttribute("aria-label", member.name + " のSteam ID");
-        steamIdInput.title = "参照用（BattleMetrics連携には使われない）";
+        steamIdInput.title = "Steam ID か プロフィールURL を貼れる（参照用・BattleMetrics連携には使われない）";
         steamIdInput.addEventListener("change", function () {
-          member.steamId = steamIdInput.value.trim();
+          var p = parseSteamInput(steamIdInput.value);
+          member.steamId = p ? p.steamId : steamIdInput.value.trim();
           saveTeamsState();
           renderTeamsList();
         });
@@ -2279,19 +2327,34 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
 
       card.appendChild(membersWrap);
 
-      function addMemberWithName(name, bmId) {
-        team.members.push({ id: makeId("member"), name: name, partial: false, online: null, lastOnlineAt: null, bmId: bmId || null, steamId: "", sessions: [] });
+      function addMemberWithName(name, bmId, steamRaw) {
+        // Steam ID／プロフィールURLを正規化。名前が空ならSteamから表示名を補う。
+        var steamId = "", display = "";
+        if (steamRaw) {
+          var p = parseSteamInput(steamRaw);
+          if (p) { steamId = p.steamId; display = p.display; }
+          else { steamId = String(steamRaw).trim(); }   // 解釈できなくてもそのまま保存（参照用）
+        }
+        var finalName = (name && name.trim()) ? name.trim() : (display || (steamId ? "名無し（Steam）" : ""));
+        if (!finalName && !steamId) return;
+        // 同じSteam IDの重複登録を防ぐ（名前が同じでもSteam IDが違えば別人として追加できる）
+        if (steamId && team.members.some(function (m) { return m.steamId && m.steamId === steamId; })) {
+          toast("そのSteam IDはこのチームに登録済み");
+          return;
+        }
+        team.members.push({ id: makeId("member"), name: finalName, partial: false, online: null, lastOnlineAt: null, bmId: bmId || null, steamId: steamId, sessions: [] });
         saveTeamsState();
         renderTeamsList();
         refreshTeamStatuses();
       }
 
       var addWidget = createNameSearchWidget({
-        placeholder: "例：Bandit_King",
+        placeholder: "名前（例：Bandit_King）",
         ariaLabel: "メンバー名を追加",
+        secondInput: { placeholder: "Steam ID / プロフィールURL（任意）", ariaLabel: "Steam IDまたはプロフィールURL" },
         buttonText: "＋ メンバー追加",
-        onPick: function (name, id) { addMemberWithName(name, id); },
-        onManualSubmit: function (name) { addMemberWithName(name, null); }
+        onPick: function (name, id, steamRaw) { addMemberWithName(name, id, steamRaw); },
+        onManualSubmit: function (name, steamRaw) { addMemberWithName(name, null, steamRaw); }
       });
       card.appendChild(addWidget.wrap);
 
