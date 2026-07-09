@@ -431,14 +431,21 @@
   var STORAGE_KEY = "rustoria-us-main-teams-v1";
   function loadState() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); } catch (e) { return {}; } }
   function loadSeasonMeta() { try { return JSON.parse(localStorage.getItem("raidar-season-meta") || "{}") || {}; } catch (e) { return {}; } }
-  function currentSeasonNum() { try { return parseInt(localStorage.getItem("raidar-season") || "1", 10) || 1; } catch (e) { return 1; } }
+  // index.html と同じサーバー識別子。シーズンをサーバー別に分けるためのキー。
+  function serverSlug(name) { return String(name || "srv").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "srv"; }
+  function currentServerName() { try { var s = JSON.parse(localStorage.getItem("rustoria-tracker-bm-server") || "null"); return (s && s.name) ? s.name : "Rustoria.co · US Main"; } catch (e) { return "Rustoria.co · US Main"; } }
+  function seasonMapBySrv() { try { return JSON.parse(localStorage.getItem("raidar-season-by-server") || "{}") || {}; } catch (e) { return {}; } }
+  function currentSeasonForServer() { var v = seasonMapBySrv()[serverSlug(currentServerName())]; return (typeof v === "number" && v > 0) ? v : 1; }
+  function currentLiveKey() { return serverSlug(currentServerName()) + "#" + currentSeasonForServer(); }
+  function seasonNumFromKey(k) { var p = String(k).split("#"); return p.length > 1 ? p[1] : k; }
   function fmtDay(ts) { if (typeof ts !== "number") return ""; var d = new Date(ts); return (d.getMonth() + 1) + "/" + d.getDate(); }
   function seasonServerShort(srv) { return srv ? String(srv).replace(/^Rustoria\.co\s*[·・]?\s*/i, "") : ""; }
-  function seasonOptLabel(k, isLive) {
-    var m = loadSeasonMeta()[String(k)] || {};
-    var range = m.start ? (fmtDay(m.start) + "〜" + (m.end ? fmtDay(m.end) : "現在")) : "";
+  // key は "slug#num"（複合）。live のときは現在シーズンのキーを渡す。
+  function seasonOptLabel(key, isLive) {
+    var m = loadSeasonMeta()[key] || {};
+    var range = m.start ? (fmtDay(m.start) + "〜" + (isLive ? "現在" : (m.end ? fmtDay(m.end) : ""))) : "";
     var extra = [range, seasonServerShort(m.server)].filter(Boolean).join("・");
-    return (isLive ? "現在 " : "") + "シーズン" + k + (extra ? "（" + extra + "）" : "");
+    return (isLive ? "現在 " : "") + "シーズン" + seasonNumFromKey(key) + (extra ? "（" + extra + "）" : "");
   }
   function computeRoomGlobals() {
     var state = loadState(); var teams = (state && Array.isArray(state.teams)) ? state.teams : [];
@@ -541,7 +548,8 @@
   function seasonKeysOf(members) {
     var set = {};
     members.forEach(function (m) { if (m.seasons && typeof m.seasons === "object") Object.keys(m.seasons).forEach(function (k) { set[k] = true; }); });
-    return Object.keys(set).map(Number).filter(function (n) { return !isNaN(n); }).sort(function (a, b) { return b - a; });
+    var meta = loadSeasonMeta();
+    return Object.keys(set).sort(function (a, b) { return ((meta[b] && meta[b].start) || 0) - ((meta[a] && meta[a].start) || 0); });
   }
   function memberSeasonData(m, season) {
     if (season === "live") {
@@ -564,10 +572,10 @@
     var keys = seasonKeysOf(members);
     var sel = document.getElementById("farm-season");
     if (sel && sel.options.length === 0) {
-      var cur = currentSeasonNum();
-      var archived = keys.filter(function (k) { return k !== cur && k > 0; }).sort(function (a, b) { return b - a; });
-      var opts = '<option value="live">' + esc(seasonOptLabel(cur, true)) + '</option>' +
-        archived.map(function (k) { return '<option value="' + k + '">' + esc(seasonOptLabel(k, false)) + '</option>'; }).join("");
+      var liveKey = currentLiveKey();
+      var archived = keys.filter(function (k) { return k !== liveKey; });
+      var opts = '<option value="live">' + esc(seasonOptLabel(liveKey, true)) + '</option>' +
+        archived.map(function (k) { return '<option value="' + esc(k) + '">' + esc(seasonOptLabel(k, false)) + '</option>'; }).join("");
       sel.innerHTML = opts;
       sel.value = "live"; currentFarmSeason = "live"; // 既定は現在シーズン
       sel.addEventListener("change", function () { currentFarmSeason = sel.value; renderFarm(); });

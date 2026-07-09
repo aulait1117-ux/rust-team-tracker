@@ -361,6 +361,12 @@
   .farm-file-note { font-size: 11px; color: var(--text-faint); margin-top: 4px; }
   .farm-preview { display: block; max-width: 220px; max-height: 130px; margin-top: 8px; border-radius: 5px; border: 1px solid var(--line); }
   .farm-preview[hidden] { display: none; }
+  .farm-canvas-wrap { position: relative; display: inline-block; margin-top: 8px; max-width: 100%; line-height: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .farm-canvas-wrap[hidden] { display: none; }
+  .farm-ocr-canvas { display: block; max-width: 100%; height: auto; cursor: crosshair; }
+  .farm-sel-box { position: absolute; border: 1.5px solid var(--moss); background: rgba(143,185,110,0.16); pointer-events: none; }
+  .farm-sel-box[hidden] { display: none; }
+  .farm-range-btn { margin-top: 8px; }
   .btn-primary {
     display: inline-block; background: var(--moss); border: 1px solid var(--moss); color: var(--ink);
     font-size: 13px; font-weight: 600; padding: 9px 16px; border-radius: 4px; cursor: pointer;
@@ -1161,15 +1167,19 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
   // ===== ワイプ検出→全ステータスリセット =====
   // 次ワイプ時刻が大きく先（翌週）へ進んだら「ワイプが起きた」と判定し、全員のIN時間・ファーム記録・サイト稼働を消す。
   var WIPE_KEY = "raidar-known-next-wipe";
-  var SEASON_KEY = "raidar-season";
-  var SEASON_META_KEY = "raidar-season-meta"; // { "1": { start, end, server }, ... }
-  function getSeason() { try { return parseInt(localStorage.getItem(SEASON_KEY) || "1", 10) || 1; } catch (e) { return 1; } }
-  function setSeason(n) { try { localStorage.setItem(SEASON_KEY, String(n)); } catch (e) { /* ignore */ } }
+  var SEASON_BY_SERVER_KEY = "raidar-season-by-server"; // { "<slug>": <num> } サーバーごとのシーズン番号
+  var SEASON_META_KEY = "raidar-season-meta"; // { "<slug>#<num>": { start, end, server }, ... }
+  // サーバー名から安定した識別子を作る（シーズンをサーバー別に分けるためのキー）。ranking.html と同じロジックにすること。
+  function serverSlug() { return String(BM_SERVER_NAME || "srv").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "srv"; }
+  function getSeasonMap() { try { return JSON.parse(localStorage.getItem(SEASON_BY_SERVER_KEY) || "{}") || {}; } catch (e) { return {}; } }
+  function getSeason() { var v = getSeasonMap()[serverSlug()]; return (typeof v === "number" && v > 0) ? v : 1; }
+  function setSeason(n) { var m = getSeasonMap(); m[serverSlug()] = n; try { localStorage.setItem(SEASON_BY_SERVER_KEY, JSON.stringify(m)); } catch (e) { /* ignore */ } }
+  function seasonArchiveKey(num) { return serverSlug() + "#" + num; } // アーカイブ/メタのキー（サーバー別）
   function getSeasonMeta() { try { return JSON.parse(localStorage.getItem(SEASON_META_KEY) || "{}") || {}; } catch (e) { return {}; } }
   function setSeasonMeta(m) { try { localStorage.setItem(SEASON_META_KEY, JSON.stringify(m)); } catch (e) { /* ignore */ } }
   // 現在シーズンのメタ（開始日・サーバー）が無ければ作る。ページ初期化時に呼ぶ。
   function ensureCurrentSeasonMeta() {
-    var m = getSeasonMeta(), s = String(getSeason());
+    var m = getSeasonMeta(), s = seasonArchiveKey(getSeason());
     if (!m[s] || typeof m[s] !== "object") m[s] = {};
     if (typeof m[s].start !== "number") m[s].start = Date.now();
     if (!m[s].server) m[s].server = BM_SERVER_NAME;
@@ -1180,9 +1190,10 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
   window.raidarResetSeasons = function () {
     teamsState.teams.forEach(function (t) { (t.members || []).forEach(function (m) { m.seasons = {}; }); });
     try {
-      localStorage.setItem(SEASON_KEY, "1");
+      localStorage.removeItem(SEASON_BY_SERVER_KEY);
       localStorage.setItem(SEASON_META_KEY, "{}");
       localStorage.removeItem(WIPE_KEY);
+      localStorage.removeItem("raidar-wipe-reset-for");
       localStorage.setItem(SITE_TIME_KEY, "0");
     } catch (e) { /* ignore */ }
     ensureCurrentSeasonMeta();
@@ -1203,23 +1214,25 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
   }
   function resetAllStatsForWipe() {
     var season = getSeason();
+    var akey = seasonArchiveKey(season);          // 例: "rustoria-co-us-main#3"
+    var nextKey = seasonArchiveKey(season + 1);
     teamsState.teams.forEach(function (t) {
       (Array.isArray(t.members) ? t.members : []).forEach(function (m) {
         if (!m.seasons || typeof m.seasons !== "object") m.seasons = {};
-        // 記録がある人だけアーカイブ（空シーズンは残さない）
+        // 記録がある人だけアーカイブ（空シーズンは残さない）。キーはサーバー別。
         if (memberFarmLogs(m).length || memberTotalOnlineMs(m) > 0) {
-          m.seasons[String(season)] = { totals: memberResourceTotalsMap(m), playMs: memberTotalOnlineMs(m), records: memberFarmLogs(m).length };
+          m.seasons[akey] = { totals: memberResourceTotalsMap(m), playMs: memberTotalOnlineMs(m), records: memberFarmLogs(m).length };
         }
         m.sessions = []; m.farmLogs = []; m.online = null; m.lastOnlineAt = null;
       });
     });
-    // シーズンのメタ（期間・サーバー）を更新：今のシーズンを締めて、次のシーズンを開始
+    // シーズンのメタ（期間・サーバー）を更新：今のシーズンを締めて、次のシーズンを開始（サーバー別キー）
     var now = Date.now();
     var meta = getSeasonMeta();
-    if (!meta[String(season)] || typeof meta[String(season)] !== "object") meta[String(season)] = { start: now };
-    meta[String(season)].end = now;
-    if (!meta[String(season)].server) meta[String(season)].server = BM_SERVER_NAME;
-    meta[String(season + 1)] = { start: now, server: BM_SERVER_NAME };
+    if (!meta[akey] || typeof meta[akey] !== "object") meta[akey] = { start: now };
+    meta[akey].end = now;
+    if (!meta[akey].server) meta[akey].server = BM_SERVER_NAME;
+    meta[nextKey] = { start: now, server: BM_SERVER_NAME };
     setSeasonMeta(meta);
     setSeason(season + 1);
     try { localStorage.setItem(SITE_TIME_KEY, "0"); } catch (e) { /* ignore */ }
@@ -1228,14 +1241,26 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     if (typeof updateSeasonDisplay === "function") updateSeasonDisplay();
     toast("🧹 シーズン" + season + "を保存し、シーズン" + (season + 1) + "開始（ステータスをリセット）");
   }
+  var WIPE_RESET_KEY = "raidar-wipe-reset-for"; // 既にリセット済みのワイプ境界（多重発火防止）
+  function lsInt(key) { try { return parseInt(localStorage.getItem(key) || "0", 10) || 0; } catch (e) { return 0; } }
+  function lsSet(key, v) { try { localStorage.setItem(key, String(v)); } catch (e) { /* ignore */ } }
+  // ワイプ検出：①次ワイプ時刻が翌週へジャンプ ②既知ワイプ時刻を現在時刻が過ぎた（サーバー更新が遅い場合の保険）
+  // の2経路で検出。同じワイプ境界で二度リセットしないよう WIPE_RESET_KEY で管理する。
   function checkWipeReset(nextWipeMs) {
     if (!nextWipeMs || isNaN(nextWipeMs)) return;
-    var known = 0;
-    try { known = parseInt(localStorage.getItem(WIPE_KEY) || "0", 10) || 0; } catch (e) { /* ignore */ }
-    if (!known) { try { localStorage.setItem(WIPE_KEY, String(nextWipeMs)); } catch (e) { /* ignore */ } return; }
-    if (nextWipeMs > known + 3600000) { // 次ワイプが1時間以上先へジャンプ＝ワイプ後に翌週へ更新された
+    var known = lsInt(WIPE_KEY);
+    if (!known) { lsSet(WIPE_KEY, nextWipeMs); return; }
+    var resetFor = lsInt(WIPE_RESET_KEY);
+    var jumped = nextWipeMs > known + 3600000;
+    var passed = Date.now() > known + 60000;
+    if (jumped) {
+      if (resetFor !== known) { resetAllStatsForWipe(); lsSet(WIPE_RESET_KEY, known); } // まだこの境界でリセットしていなければ実行
+      lsSet(WIPE_KEY, nextWipeMs); // 基準を新しい次ワイプへ前進
+      return;
+    }
+    if (passed && resetFor !== known) { // 過ぎたのにサーバー未更新→保険でリセット（境界を記録して二重発火を防ぐ）
       resetAllStatsForWipe();
-      try { localStorage.setItem(WIPE_KEY, String(nextWipeMs)); } catch (e) { /* ignore */ }
+      lsSet(WIPE_RESET_KEY, known);
     }
   }
 
@@ -2162,6 +2187,27 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     });
   }
 
+  // 画像の指定領域(元画像px)を切り出し、拡大＋白黒反転＋2値化したcanvasを返す（OCR用・範囲選択で使う）。
+  function preprocessImageRegion(img, sx, sy, sw, sh) {
+    sx = Math.max(0, Math.round(sx)); sy = Math.max(0, Math.round(sy));
+    sw = Math.max(1, Math.round(sw)); sh = Math.max(1, Math.round(sh));
+    var scale = Math.max(1, Math.min(2.4, 1700 / Math.max(1, sw)));
+    var w = Math.max(1, Math.round(sw * scale)), h = Math.max(1, Math.round(sh * scale));
+    var c = document.createElement("canvas"); c.width = w; c.height = h;
+    var ctx = c.getContext("2d");
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+    try {
+      var id = ctx.getImageData(0, 0, w, h), d = id.data;
+      for (var k = 0; k < d.length; k += 4) {
+        var lum = 0.299 * d[k] + 0.587 * d[k + 1] + 0.114 * d[k + 2];
+        var bw = (255 - lum) < 135 ? 0 : 255;
+        d[k] = d[k + 1] = d[k + 2] = bw;
+      }
+      ctx.putImageData(id, 0, 0);
+    } catch (err) { /* getImageData失敗時は元画像のまま */ }
+    return c;
+  }
+
   function addPhotoToTeam(team, dataUrl) {
     if (!Array.isArray(team.photos)) team.photos = [];
     team.photos.push({ id: makeId("photo"), dataUrl: dataUrl, addedAt: Date.now() });
@@ -2939,6 +2985,18 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
 
   // ===== ファーム記録＝味方のEXPの主軸 =====
   // 味方メンバーがrustoriaのRESOURCES画面スクショ＋数値で記録する。記録するとEXP獲得→レベルアップ。照合システムは無し。
+  // Firebase容量対策：スクショ画像は直近 FARM_IMG_KEEP 件だけ保持し、古い記録は数値だけ残して画像を落とす。
+  var FARM_IMG_KEEP = 12;
+  function trimFarmImages(member) {
+    var logs = memberFarmLogs(member); // 新しい順（unshift）
+    var kept = 0;
+    for (var i = 0; i < logs.length; i++) {
+      if (logs[i] && logs[i].img) {
+        kept++;
+        if (kept > FARM_IMG_KEEP) logs[i].img = null; // 数値・EXPは維持、画像だけ破棄
+      }
+    }
+  }
   function recordFarm(member, resources, note, dataUrl) {
     if (!dataUrl) { toast("⚠ スクショを貼ってから記録して"); return; }
     if (!Array.isArray(member.farmLogs)) member.farmLogs = [];
@@ -2948,6 +3006,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       note: (note || "").slice(0, 120), img: dataUrl
     };
     member.farmLogs.unshift(log);
+    trimFarmImages(member);
     saveTeamsState();
     var gained = farmLogExp(log);
     var afterLv = memberLevelInfo(member, "friend").level;
@@ -2976,33 +3035,85 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     var intro = document.createElement("div"); intro.className = "farm-file-note";
     intro.textContent = "数値は手入力できない（嘘防止）。rustoriaの各タブ（RESOURCES／FARMING／PVP／RAIDING等）のスクショを貼ると、AIが数値を読み取って自動入力する。タブごとに順番に貼れば全項目が合算される。";
 
-    var shotLbl = document.createElement("label"); shotLbl.className = "farm-field-lbl"; shotLbl.textContent = "スクショを貼る（AIが自動読み取り・複数タブは順に貼る）";
+    var shotLbl = document.createElement("label"); shotLbl.className = "farm-field-lbl"; shotLbl.textContent = "スクショを貼る（AIが自動読み取り。ズレる時は画像上をドラッグして対象を囲み「選択範囲だけ読み取る」）";
     var fileInput = document.createElement("input");
     fileInput.type = "file"; fileInput.accept = "image/*"; fileInput.className = "farm-file";
     var ocrStatus = document.createElement("div"); ocrStatus.className = "farm-ocr-status"; ocrStatus.hidden = true;
-    var preview = document.createElement("img"); preview.className = "farm-preview"; preview.hidden = true; preview.alt = "スクショプレビュー";
+    // ドラッグで範囲選択できるキャンバス
+    var canvasWrap = document.createElement("div"); canvasWrap.className = "farm-canvas-wrap"; canvasWrap.hidden = true;
+    var canvas = document.createElement("canvas"); canvas.className = "farm-ocr-canvas";
+    var selBox = document.createElement("div"); selBox.className = "farm-sel-box"; selBox.hidden = true;
+    canvasWrap.appendChild(canvas); canvasWrap.appendChild(selBox);
+    var rangeBtn = document.createElement("button");
+    rangeBtn.type = "button"; rangeBtn.className = "btn-ghost btn-sm farm-range-btn"; rangeBtn.textContent = "🔍 選択範囲だけ読み取る"; rangeBtn.hidden = true;
+
+    var srcImg = null, canvasScale = 1, sel = null;
+
     fileInput.addEventListener("change", function () {
       var f = fileInput.files && fileInput.files[0];
-      if (!f) { pendingDataUrl = null; preview.hidden = true; updateState(); return; }
-      compressImageFile(f).then(function (url) {
-        pendingDataUrl = url; preview.src = url; preview.hidden = false; updateState();
-      }).catch(function () { toast("⚠ 画像の読み込みに失敗した"); });
-      runOcr(f);
+      if (!f) { pendingDataUrl = null; canvasWrap.hidden = true; rangeBtn.hidden = true; sel = null; selBox.hidden = true; updateState(); return; }
+      compressImageFile(f).then(function (url) { pendingDataUrl = url; updateState(); }).catch(function () { toast("⚠ 画像の読み込みに失敗した"); });
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        var img = new Image();
+        img.onload = function () {
+          srcImg = img;
+          var maxW = Math.min(img.width, 720);
+          canvasScale = maxW / img.width;
+          canvas.width = Math.round(img.width * canvasScale); canvas.height = Math.round(img.height * canvasScale);
+          canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+          canvasWrap.hidden = false; rangeBtn.hidden = false; sel = null; selBox.hidden = true;
+          runOcr(null); // まず全体を自動OCR
+        };
+        img.onerror = function () { toast("⚠ 画像の読み込みに失敗した"); };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(f);
     });
-    function runOcr(file) {
+
+    // 選択矩形をキャンバス上に描く（%指定で表示スケールに追従）
+    function drawSel() {
+      if (!sel || sel.w < 1 || sel.h < 1) { selBox.hidden = true; return; }
+      selBox.hidden = false;
+      selBox.style.left = (sel.x / canvas.width * 100) + "%";
+      selBox.style.top = (sel.y / canvas.height * 100) + "%";
+      selBox.style.width = (sel.w / canvas.width * 100) + "%";
+      selBox.style.height = (sel.h / canvas.height * 100) + "%";
+    }
+    function canvasPos(e) {
+      var r = canvas.getBoundingClientRect();
+      var cx = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+      var cy = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
+      return { x: Math.max(0, Math.min(canvas.width, cx * (canvas.width / r.width))), y: Math.max(0, Math.min(canvas.height, cy * (canvas.height / r.height))) };
+    }
+    var dragging = false, dsx = 0, dsy = 0;
+    canvas.addEventListener("mousedown", function (e) { dragging = true; var p = canvasPos(e); dsx = p.x; dsy = p.y; sel = { x: dsx, y: dsy, w: 0, h: 0 }; drawSel(); e.preventDefault(); });
+    document.addEventListener("mousemove", function (e) { if (!dragging) return; var p = canvasPos(e); sel = { x: Math.min(dsx, p.x), y: Math.min(dsy, p.y), w: Math.abs(p.x - dsx), h: Math.abs(p.y - dsy) }; drawSel(); });
+    document.addEventListener("mouseup", function () { if (!dragging) return; dragging = false; if (sel && (sel.w < 6 || sel.h < 6)) { sel = null; selBox.hidden = true; } });
+
+    rangeBtn.addEventListener("click", function () {
+      if (!srcImg) return;
+      if (!sel || sel.w < 6 || sel.h < 6) { toast("画像上をドラッグして範囲を囲ってから押して"); return; }
+      runOcr({ sx: sel.x / canvasScale, sy: sel.y / canvasScale, sw: sel.w / canvasScale, sh: sel.h / canvasScale });
+    });
+
+    function runOcr(region) {
       if (!window.Tesseract) { ocrStatus.hidden = false; ocrStatus.textContent = "（この環境では自動読み取り不可）"; return; }
-      ocrStatus.hidden = false; ocrStatus.className = "farm-ocr-status"; ocrStatus.textContent = "🔍 スクショから数値を読み取り中…（数秒）";
-      preprocessForOcr(file).then(function (canvas) {
-        return window.Tesseract.recognize(canvas, "eng");
-      }).then(function (res) {
+      if (!srcImg) return;
+      ocrStatus.hidden = false; ocrStatus.className = "farm-ocr-status";
+      ocrStatus.textContent = region ? "🔍 選択範囲を読み取り中…" : "🔍 スクショから数値を読み取り中…（数秒）";
+      var cv = region
+        ? preprocessImageRegion(srcImg, region.sx, region.sy, region.sw, region.sh)
+        : preprocessImageRegion(srcImg, 0, 0, srcImg.width, srcImg.height);
+      window.Tesseract.recognize(cv, "eng").then(function (res) {
         var parsed = parseResourceOcr(res && res.data ? res.data.text : "");
         var n = 0;
         RESOURCE_TYPES.forEach(function (rt) {
           if (parsed[rt.id] != null) { resInputs[rt.id].value = parsed[rt.id]; n++; }
         });
         updateState();
-        if (n > 0) { ocrStatus.className = "farm-ocr-status ok"; ocrStatus.textContent = "✅ " + n + "項目を自動入力した。別タブのスクショも続けて貼れる。"; }
-        else { ocrStatus.className = "farm-ocr-status warn"; ocrStatus.textContent = "⚠ 数値を読み取れなかった。別タブや鮮明なスクショで試して。"; }
+        if (n > 0) { ocrStatus.className = "farm-ocr-status ok"; ocrStatus.textContent = "✅ " + n + "項目を自動入力した。" + (region ? "" : "ズレたら対象を囲って「選択範囲だけ読み取る」。"); }
+        else { ocrStatus.className = "farm-ocr-status warn"; ocrStatus.textContent = "⚠ 読み取れなかった。対象（数字の並び）を囲って「選択範囲だけ読み取る」を試して。"; }
       }).catch(function () {
         ocrStatus.className = "farm-ocr-status warn"; ocrStatus.textContent = "⚠ 読み取りに失敗。別のスクショで試して。";
       });
@@ -3065,7 +3176,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     });
 
     body.appendChild(intro);
-    body.appendChild(shotLbl); body.appendChild(fileInput); body.appendChild(ocrStatus); body.appendChild(preview);
+    body.appendChild(shotLbl); body.appendChild(fileInput); body.appendChild(ocrStatus); body.appendChild(canvasWrap); body.appendChild(rangeBtn);
     body.appendChild(resLbl); body.appendChild(grid);
     body.appendChild(expHint);
     body.appendChild(saveBtn);
@@ -3870,9 +3981,11 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     setTimeout(function () {
       try {
         teamsState.teams.forEach(function (t) { (t.members || []).forEach(function (m) { m.seasons = {}; m.sessions = []; m.farmLogs = []; m.online = null; m.lastOnlineAt = null; }); });
-        localStorage.setItem("raidar-season", "1");
+        localStorage.removeItem("raidar-season");
+        localStorage.removeItem("raidar-season-by-server");
         localStorage.setItem("raidar-season-meta", "{}");
         localStorage.removeItem("raidar-known-next-wipe");
+        localStorage.removeItem("raidar-wipe-reset-for");
         localStorage.setItem("raidar-site-open-seconds", "0");
         localStorage.setItem("raidar-season-wiped-2026-07-10", "1");
         ensureCurrentSeasonMeta();
@@ -3987,6 +4100,8 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     try { localStorage.setItem(BM_SERVER_STORAGE_KEY, JSON.stringify({ id: id, name: name })); } catch (e) { /* ignore */ }
     updateServerEyebrow();
     fetchServerInfo();
+    ensureCurrentSeasonMeta();                                        // 切替先サーバーのシーズンを用意
+    if (typeof updateSeasonDisplay === "function") updateSeasonDisplay(); // シーズン番号もそのサーバーのものに更新
     // モーダルは閉じない（選択後もサーバー比較・シーズン操作を続けられるように）。閉じるボタンで閉じる。
     toast("🔄 監視サーバーを「" + name + "」に変更した");
     lastKnownOnlineNamesLower = [];
