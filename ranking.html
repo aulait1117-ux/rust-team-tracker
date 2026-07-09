@@ -236,8 +236,8 @@
   function rarityForLevel(level) { var r = RARITIES[0]; for (var i = 0; i < RARITIES.length; i++) { if (level >= RARITIES[i].minLevel) r = RARITIES[i]; } return r; }
   function rarityByKey(k) { for (var i = 0; i < RARITIES.length; i++) { if (RARITIES[i].key === k) return RARITIES[i]; } return RARITIES[0]; }
   function rarityExp(k) { return RARITY_EXP[k] || 0; }
-  var LEVEL_EXP_K = 28, LEVEL_EXP_P = 2.45, LEVEL_HARD_CAP = 100000;
-  var IN_EXP_PER_HOUR = 8, IN_EXP_PER_HOUR_ENEMY = 55;
+  var LEVEL_EXP_K = 20, LEVEL_EXP_P = 1.9, LEVEL_HARD_CAP = 100000; // 2026-07-10 社長要望でレベル曲線を緩和（旧28/2.45）
+  var IN_EXP_PER_HOUR = 100, IN_EXP_PER_HOUR_ENEMY = 150; // 2026-07-10 プレイ時間EXPを主軸化（旧8/55）
   var RESOURCE_TYPES = [
     { id: "sulfur_ore", exp: 0.5 }, { id: "metal_ore", exp: 0.15 }, { id: "hq_metal_ore", exp: 3 },
     { id: "stones", exp: 0.02 }, { id: "wood", exp: 0.02 }, { id: "leather", exp: 0.3 },

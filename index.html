@@ -2594,7 +2594,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     });
     return tot;
   }
-  // ===== 経験値・レベル（最大100・なかなか上がらない） =====
+  // ===== 経験値・レベル（上限なし・プレイ時間主軸で上がりやすい／2026-07-10 社長要望で緩和） =====
   // EXPの源泉：①ファーム記録（スクショ照合つき・主軸）②IN時間（少しだけ加算）。
   // 敵はファーム記録が付けられないのでIN時間ぶんだけでLvが付く。
   var LEVEL_HARD_CAP = 100000; // レベル上限は「無制限」。これは無限ループ防止の安全弁のみ（実際到達不能）。
@@ -2620,9 +2620,9 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     for (var i = 0; i < RARITIES.length; i++) { if (level >= RARITIES[i].minLevel) r = RARITIES[i]; }
     return r;
   }
-  var LEVEL_EXP_K = 28, LEVEL_EXP_P = 2.45; // Lv100到達に約1.9M EXP。高レベルほど鬼のように重い。
-  var IN_EXP_PER_HOUR = 8;                  // 味方：IN時間の寄与は控えめ（主軸はファーム記録）
-  var IN_EXP_PER_HOUR_ENEMY = 55;           // 敵：ファーム記録が付けられない分、IN時間EXPを大幅ブースト（上がりやすく）
+  var LEVEL_EXP_K = 20, LEVEL_EXP_P = 1.9;  // Lv100到達に約12万EXP。プレイ時間主軸でもサクサク上がるカーブに緩和（旧K28/P2.45＝約190万EXP・2026-07-10 社長要望）。
+  var IN_EXP_PER_HOUR = 100;                // 味方：プレイ時間(IN時間)1hで100EXP。プレイ時間だけでレベルが上がる主軸に（旧8・2026-07-10 社長要望）
+  var IN_EXP_PER_HOUR_ENEMY = 150;          // 敵：ファーム記録が付けられない分さらにブースト（味方の1.5倍。旧55）
   // ファーム記録：rustoriaのRESOURCES画面のスクショを貼り、写っている数値を入力する（スクショが証拠）。
   // 資源ごとに単価が違う（硫黄・高品質金属は高い、石・木は安い）。照合システムは無し。
   // ※単価は設計値（ゲーム事実ではない）。ここを変えるだけで全記録のEXPが再計算される。
