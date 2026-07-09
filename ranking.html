@@ -485,7 +485,18 @@
 
     <div class="paste-bar">
       <button class="btn-ghost" id="rustoria-view-btn" type="button" title="今見ているサーバーのrustoria.coリーダーボードを新しいタブで開く（ログイン済みなら自分のファーム数が見える）">🔗 ファーム数を見る（rustoria.co）</button>
+      <button class="btn-ghost" id="rustoria-import-toggle-btn" type="button" title="社長のログイン済みブラウザで数字を取得して一括取り込み">📥 rustoria取り込み（ログイン・一括）</button>
       <button class="btn-ghost" id="paste-toggle-btn" type="button">📋 rustoria.coの表示をコピペして自動入力</button>
+    </div>
+    <div class="paste-box" id="rustoria-import-box" hidden>
+      <p><b>ログイン取り込み（社長のブラウザで数字を取得）：</b><br>
+      ① 下の「⬇ rustoria取り込み」を<b>ブラウザのブックマークバーにドラッグ</b>して登録する（初回だけ。※ここで<b>クリックはしない</b>＝このページ上では動きません）。<br>
+      ② <b>rustoria.coにログインした状態</b>でリーダーボードのページを開き、登録したブックマークを<b>クリック</b>→取り込む名前を入力（カンマ区切りで複数OK）→数字が自動でコピーされる。<br>
+      ③ このページに戻って下の欄に<b>貼り付け</b>→「📥 取り込む」。ランキング表に反映されます。<br>
+      <span style="opacity:.75">※ パスワード・トークンはどこにも保存しません。社長のログイン状態のまま読むだけ＝「自分の画面の数字を自動コピー」と同じです。</span></p>
+      <p><a class="btn-ghost" id="rustoria-bookmarklet-link" href="#" style="text-decoration:none;display:inline-block" draggable="true">⬇ rustoria取り込み（これをブックマークバーへドラッグ）</a></p>
+      <textarea id="rustoria-import-textarea" rows="3" placeholder="ブックマークでコピーしたデータをここに貼り付け…"></textarea>
+      <button class="btn-ghost" id="rustoria-import-btn" type="button">📥 取り込む</button>
     </div>
     <div class="paste-box" id="paste-box" hidden>
       <p><b>使い方：</b>「🔗 ファーム数を見る」でこのサーバーのrustoria.coページを開く（ログイン済みなら自分の数字が見える）→ 木・石・金属鉱石・硫黄・上金・皮・脂肪・骨の表示部分をドラッグしてコピー(Ctrl+C) → 下に貼り付け。数値だけ自動で読み取って上のフォームに入れる（資源8種に対応）。キル・デスは手入力、プレイ時間は「⏱ 自動取得」でBattleMetricsから取得可。<br>※rustoria.coが成績APIを<b>ログイン必須</b>に変更したため、🌾のワンクリック自動取得は現在使えません（この「見る→コピペ」で代替してほしい）。</p>
@@ -771,6 +782,7 @@ import { getDatabase, ref, child, set, get, onValue, push, remove } from "https:
 
   var SOURCE_LABELS = {
     rustoria_auto: "rustoria.co自動取得",
+    rustoria_login: "rustoriaログイン取込",
     paste_parse: "コピペ解析",
     manual: "手入力",
     battlemetrics_auto: "BattleMetrics自動取得",
@@ -778,6 +790,7 @@ import { getDatabase, ref, child, set, get, onValue, push, remove } from "https:
   };
   var SOURCE_ICONS = {
     rustoria_auto: "🌾",
+    rustoria_login: "📥",
     paste_parse: "📋",
     manual: "",
     battlemetrics_auto: "⏱",
@@ -1432,6 +1445,74 @@ import { getDatabase, ref, child, set, get, onValue, push, remove } from "https:
     var url = "https://rustoria.co/leaderboards?server=" + encodeURIComponent(selectedServer);
     window.open(url, "_blank", "noopener");
   });
+
+  // ---------- rustoria ログイン取り込み（ブックマークレット方式・社長のリスク許容記録済み） ----------
+  // rustoriaが成績APIをログイン必須化したため、企業道サーバー（中継Worker）ではなく「社長の
+  // ログイン済みブラウザ自身」に取得させる。ブックマークレットはrustoria.co上で動き、社長のcookie
+  // セッションのまま api.rustoria.co から資源/PvPを取得→クリップボードへ。認証情報はrustoria.coの
+  // 外に出ず、企業道サーバーは非関与＝「自分の画面の数字を自動コピー」と同等原理。11_顧問室/活動ログ参照。
+  var RUSTORIA_BOOKMARKLET = "javascript:(async()=>{try{var s=new URLSearchParams(location.search).get('server');if(!s){s=prompt('rustoriaサーバーID (例: vanilla_low_pop_us)');if(!s)return;}var n=prompt('取り込む名前（カンマ区切りで複数OK）');if(!n)return;var L=n.split(',').map(function(x){return x.trim();}).filter(Boolean);var A='https://api.rustoria.co/statistics/leaderboards/'+encodeURIComponent(s);async function f(r,nm){var res=await fetch(A+'/'+r+'?from=0&sortBy=total&orderBy=desc&username='+encodeURIComponent(nm),{credentials:'include'});if(!res.ok)throw new Error(r+' '+res.status);var j=await res.json();var rows=j.leaderboard||[];return rows.length===1?rows[0].data:null;}var out=[];for(var i=0;i<L.length;i++){var nm=L[i];var rs=null,pv=null;try{rs=await f('resources',nm);}catch(e){}try{pv=await f('pvp',nm);}catch(e){}out.push({name:nm,wood:(rs&&rs.farming_resource_wood_harvested)||0,stone:(rs&&rs.farming_resource_stone_harvested)||0,metalOre:(rs&&rs.farming_resource_metal_harvested)||0,sulfur:(rs&&rs.farming_resource_sulfur_harvested)||0,hqm:(rs&&rs.farming_resource_hqm_harvested)||0,leather:(rs&&rs.farming_animal_leather_harvested)||0,fat:(rs&&rs.farming_animal_fat_harvested)||0,bone:(rs&&rs.farming_animal_bone_harvested)||0,kills:(pv&&pv.pvp_player_kills_total)||0,deaths:(pv&&pv.pvp_player_deaths_total)||0,found:!!(rs||pv)});}var p=JSON.stringify({v:1,server:s,entries:out});await navigator.clipboard.writeText(p);alert('企業道用データをコピーしました（'+out.filter(function(x){return x.found;}).length+'/'+out.length+'件ヒット）。企業道ツールの「rustoria取り込み」欄に貼り付けてください。');}catch(e){alert('失敗: '+e.message+String.fromCharCode(10)+'rustoria.coにログインした状態で、リーダーボードのページ（URLに?server=が付く画面）で実行してください。');}})();";
+  (function () {
+    var link = document.getElementById("rustoria-bookmarklet-link");
+    if (link) {
+      link.setAttribute("href", RUSTORIA_BOOKMARKLET);
+      link.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        toast("このリンクはクリックせず、ブックマークバーにドラッグして使ってほしい（rustoria.coのページで押す）");
+      });
+    }
+  })();
+  document.getElementById("rustoria-import-toggle-btn").addEventListener("click", function () {
+    var box = document.getElementById("rustoria-import-box");
+    box.hidden = !box.hidden;
+  });
+  document.getElementById("rustoria-import-btn").addEventListener("click", function () {
+    var text = document.getElementById("rustoria-import-textarea").value;
+    if (!text.trim()) { toast("⚠ ブックマークでコピーしたデータを貼り付けてほしい"); return; }
+    importRustoriaPayload(text);
+  });
+
+  function importRustoriaPayload(text) {
+    var data;
+    try { data = JSON.parse(text); } catch (e) { toast("⚠ 取り込みデータが読めない（rustoriaのページでブックマークを押し直してコピーし直してほしい）"); return; }
+    if (!data || !Array.isArray(data.entries)) { toast("⚠ データ形式が違う（このツールのブックマークでコピーしたものを貼ってほしい）"); return; }
+    if (!selectedWipe) { toast("⚠ ワイプ一覧の読み込み中。少し待ってから取り込んでほしい"); return; }
+    var wipeScoped = entriesForSelectedWipe();
+    var added = 0, updated = 0, missed = 0;
+    data.entries.forEach(function (en) {
+      if (!en || !en.name) return;
+      if (!en.found) { missed++; return; }
+      var vals = {
+        wood: en.wood || 0, stone: en.stone || 0, metalOre: en.metalOre || 0, sulfur: en.sulfur || 0,
+        hqm: en.hqm || 0, leather: en.leather || 0, fat: en.fat || 0, bone: en.bone || 0,
+        kills: en.kills || 0, deaths: en.deaths || 0, resourceSource: "rustoria_login"
+      };
+      var existing = wipeScoped.find(function (x) { return x.name.toLowerCase() === String(en.name).toLowerCase(); });
+      if (existing) {
+        Object.assign(existing, vals);
+        existing.updatedAt = Date.now();
+        writeEntry(existing);
+        pushLog("update", existing.name, "rustoriaログイン取り込み");
+        updated++;
+      } else {
+        var e2 = {
+          id: makeId(), name: String(en.name), steamId: "",
+          wood: vals.wood, stone: vals.stone, metalOre: vals.metalOre, sulfur: vals.sulfur,
+          hqm: vals.hqm, leather: vals.leather, fat: vals.fat, bone: vals.bone,
+          kills: vals.kills, deaths: vals.deaths, playtimeHours: 0,
+          resourceSource: "rustoria_login", playtimeSource: "manual",
+          wipe: selectedWipe, server: (data.server || selectedServer), updatedAt: Date.now()
+        };
+        entries.push(e2);
+        writeEntry(e2);
+        pushLog("add", e2.name, "rustoriaログイン取り込み");
+        added++;
+      }
+    });
+    renderTable();
+    document.getElementById("rustoria-import-textarea").value = "";
+    toast("✓ 取り込み完了：追加" + added + "・更新" + updated + (missed ? ("・見つからず" + missed) : ""));
+  }
 
   document.getElementById("paste-toggle-btn").addEventListener("click", function () {
     var box = document.getElementById("paste-box");
