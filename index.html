@@ -4208,7 +4208,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       return;
     }
     lastTeamsFetchAt = Date.now();
-    fetchOnlinePlayerPage(bmPlayersApiUrl(), [], 1, 8)
+    fetchOnlinePlayerPage(bmPlayersApiUrl(), [], 1, 30) // VIP予約枠等でオンラインがmaxPlayers(800)を大きく超えるサーバー対策：旧8ページ(800人)では下位のメンバーを取りこぼしOFF誤判定していた（荒川さん1200位/とーか1203位が漏れていた）。上限30ページ=3000人まで走査（nextが尽きればその手前で終了）。2026-07-10
       .then(function (entries) {
         var lowerNames = entries.map(function (e) { return normName(e.name); });
         lastKnownOnlineNamesLower = lowerNames;
