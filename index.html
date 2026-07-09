@@ -582,62 +582,69 @@
     var ac=new AC();
     function schedule(){
     var now=ac.currentTime, tp=now+2.0;   // tp＝光が弾ける瞬間（題字を描き終えたあと）
-    // 2026-07-09 音量是正：旧設計は音量の大半が26〜98Hzの超低音でPC/スマホのスピーカーが鳴らせず「音がない」状態だった。
-    // 可聴帯域（筆＝数百Hz〜数kHz／鐘＝金属倍音）でしっかり鳴らし、低音は余韻として残す構成へ。全体+約30dB。
     var limiter=ac.createDynamicsCompressor();
-    limiter.threshold.value=-3; limiter.knee.value=18; limiter.ratio.value=14;
+    limiter.threshold.value=-8; limiter.knee.value=24; limiter.ratio.value=12;
     limiter.attack.value=0.003; limiter.release.value=0.25; limiter.connect(ac.destination);
-    var master=ac.createGain(); master.gain.value=0.55; master.connect(limiter);
-    var irLen=Math.floor(ac.sampleRate*3.0), ir=ac.createBuffer(2,irLen,ac.sampleRate);
+    var master=ac.createGain(); master.gain.value=0.20; master.connect(limiter);
+    var irLen=Math.floor(ac.sampleRate*3.2), ir=ac.createBuffer(2,irLen,ac.sampleRate);
     for(var ch=0;ch<2;ch++){ var d=ir.getChannelData(ch);
-      for(var i=0;i<irLen;i++){ d[i]=(Math.random()*2-1)*Math.pow(1-i/irLen,2.4); } }
+      for(var i=0;i<irLen;i++){ d[i]=(Math.random()*2-1)*Math.pow(1-i/irLen,2.2); } }
     var conv=ac.createConvolver(); conv.buffer=ir;
-    var wet=ac.createGain(); wet.gain.value=0.28; conv.connect(wet).connect(master);
+    var wet=ac.createGain(); wet.gain.value=0.40; conv.connect(wet).connect(master);
     function send(node){ node.connect(master); node.connect(conv); }
-    // 開幕の一打（可聴帯域のピン。開いた瞬間に「鳴った」と分かる）
-    (function(){ var o=ac.createOscillator(); o.type='triangle'; o.frequency.value=1046.50;
-      var g0=ac.createGain(); g0.gain.setValueAtTime(0.0001,now); g0.gain.exponentialRampToValueAtTime(0.16,now+0.008);
-      g0.gain.exponentialRampToValueAtTime(0.0001,now+0.5); o.connect(g0); send(g0); o.start(now); o.stop(now+0.55); })();
-    // 1) 筆を走らせる音（題字を描く2秒間に3ストローク・可聴帯域で明瞭に）
+    (function(){ var o=ac.createOscillator(); o.type='sine'; o.frequency.value=783.99;
+      var g0=ac.createGain(); g0.gain.setValueAtTime(0.0001,now); g0.gain.exponentialRampToValueAtTime(0.045,now+0.012);
+      g0.gain.exponentialRampToValueAtTime(0.0001,now+0.6); o.connect(g0); send(g0); o.start(now); o.stop(now+0.65); })();
     function stroke(t,dur,f0,f1,vel){
       var len=Math.floor(ac.sampleRate*dur), b=ac.createBuffer(1,len,ac.sampleRate), bd=b.getChannelData(0);
-      for(var k=0;k<len;k++){ bd[k]=(Math.random()*2-1)*(0.3+0.7*k/len); }
+      for(var k=0;k<len;k++){ bd[k]=(Math.random()*2-1)*(0.35+0.65*k/len); }
       var s=ac.createBufferSource(); s.buffer=b;
-      var bp=ac.createBiquadFilter(); bp.type='bandpass'; bp.Q.value=0.6;
+      var bp=ac.createBiquadFilter(); bp.type='bandpass'; bp.Q.value=0.7;
       bp.frequency.setValueAtTime(f0,t); bp.frequency.linearRampToValueAtTime(f1,t+dur);
       var gg=ac.createGain(); gg.gain.setValueAtTime(0.0001,t);
-      gg.gain.linearRampToValueAtTime(vel,t+dur*0.3); gg.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+      gg.gain.linearRampToValueAtTime(vel,t+dur*0.35); gg.gain.exponentialRampToValueAtTime(0.0001,t+dur);
       s.connect(bp).connect(gg); send(gg); s.start(t); s.stop(t+dur+0.02);
     }
-    stroke(now+0.15,0.34,900,2600,0.16);
-    stroke(now+0.70,0.34,800,2400,0.17);
-    stroke(now+1.28,0.40,700,2200,0.19);
-    // 2) 光が弾ける瞬間の鐘（監視＝寺鐘。金属的な倍音でしっかり可聴）
-    function bell(t,f,gain,dur){
-      var out=ac.createGain(); out.gain.setValueAtTime(0.0001,t);
-      out.gain.exponentialRampToValueAtTime(gain,t+0.012); out.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-      send(out);
-      [[1,1.0],[2.76,0.62],[5.40,0.42],[8.93,0.26],[13.3,0.14]].forEach(function(p,idx){
-        var o=ac.createOscillator(); o.type='sine'; o.frequency.value=f*p[0];
-        var pg=ac.createGain(); pg.gain.value=p[1]*(1-idx*0.06);
-        o.connect(pg).connect(out); o.start(t); o.stop(t+dur+0.05);
-      });
-      var al=Math.floor(ac.sampleRate*0.06), ab=ac.createBuffer(1,al,ac.sampleRate), ad=ab.getChannelData(0);
-      for(var m=0;m<al;m++){ ad[m]=(Math.random()*2-1)*(1-m/al); }
-      var as=ac.createBufferSource(); as.buffer=ab;
-      var ahp=ac.createBiquadFilter(); ahp.type='highpass'; ahp.frequency.value=1800;
-      var ag=ac.createGain(); ag.gain.value=gain*0.5; as.connect(ahp).connect(ag); send(ag); as.start(t); as.stop(t+0.08);
-    }
-    bell(tp,196.00,0.5,3.4);       // G3 主鐘
-    bell(tp+0.02,392.00,0.22,2.6); // オクターブ上を薄く重ねて煌めき
-    // 3) 低音の余韻（深み・良いスピーカー向け。可聴性はbell/strokeで担保済み）
+    stroke(now+0.20,0.30,1900,3200,0.020);
+    stroke(now+0.72,0.32,1700,3000,0.020);
+    stroke(now+1.24,0.38,1500,2800,0.022);
+    var rb=ac.createBuffer(1,Math.floor(ac.sampleRate*2.0),ac.sampleRate), rd=rb.getChannelData(0);
+    for(var j=0;j<rd.length;j++) rd[j]=(Math.random()*2-1);
+    var rs=ac.createBufferSource(); rs.buffer=rb;
+    var rbp=ac.createBiquadFilter(); rbp.type='bandpass'; rbp.Q.value=1.2;
+    rbp.frequency.setValueAtTime(140,now+0.6); rbp.frequency.exponentialRampToValueAtTime(3000,tp);
+    var rg=ac.createGain(); rg.gain.setValueAtTime(0.0001,now+0.6);
+    rg.gain.exponentialRampToValueAtTime(0.06,tp-0.03); rg.gain.exponentialRampToValueAtTime(0.0001,tp+0.14);
+    rs.connect(rbp).connect(rg); send(rg); rs.start(now); rs.stop(now+2.0);
     var sub=ac.createOscillator(); sub.type='sine';
-    sub.frequency.setValueAtTime(98,tp); sub.frequency.exponentialRampToValueAtTime(49,tp+0.7);
+    sub.frequency.setValueAtTime(72,tp); sub.frequency.exponentialRampToValueAtTime(26,tp+0.6);
     var sg=ac.createGain(); sg.gain.setValueAtTime(0.0001,tp);
-    sg.gain.exponentialRampToValueAtTime(0.5,tp+0.02); sg.gain.exponentialRampToValueAtTime(0.0001,tp+1.4);
-    sub.connect(sg).connect(master); sub.start(tp); sub.stop(tp+1.5);
-    master.gain.setValueAtTime(0.55,tp+3.0);
-    master.gain.exponentialRampToValueAtTime(0.0001,tp+3.8);
+    sg.gain.exponentialRampToValueAtTime(0.44,tp+0.015); sg.gain.exponentialRampToValueAtTime(0.0001,tp+1.1);
+    sub.connect(sg).connect(master); sub.start(tp); sub.stop(tp+1.2);
+    var drone=ac.createGain(); drone.gain.setValueAtTime(0.0001,now);
+    drone.gain.exponentialRampToValueAtTime(0.28,tp+0.6); drone.gain.exponentialRampToValueAtTime(0.0001,tp+3.6);
+    var dlp=ac.createBiquadFilter(); dlp.type='lowpass'; dlp.frequency.value=280;
+    drone.connect(dlp); send(dlp);
+    [32.70,49.00,65.41,98.00].forEach(function(f,i){var o=ac.createOscillator();o.type=i>1?'triangle':'sine';
+      o.frequency.value=f;o.detune.value=(i-1)*4;o.connect(drone);o.start(now);o.stop(tp+3.7);});
+    function voice(freq,t,dur,vel){
+      var o=ac.createOscillator(); o.type='sine'; o.frequency.value=freq;
+      var o2=ac.createOscillator(); o2.type='sine'; o2.frequency.value=freq; o2.detune.value=8;
+      var o3=ac.createOscillator(); o3.type='triangle'; o3.frequency.value=freq*2; o3.detune.value=-5;
+      var lp=ac.createBiquadFilter(); lp.type='lowpass';
+      lp.frequency.setValueAtTime(760,t); lp.frequency.exponentialRampToValueAtTime(2100,t+0.28);
+      lp.frequency.exponentialRampToValueAtTime(850,t+dur);
+      var gg=ac.createGain(); gg.gain.setValueAtTime(0.0001,t);
+      gg.gain.exponentialRampToValueAtTime(vel,t+0.24); gg.gain.setValueAtTime(vel,t+dur*0.55);
+      gg.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+      var h=ac.createGain(); h.gain.value=0.22; o3.connect(h).connect(lp);
+      o.connect(lp); o2.connect(lp); lp.connect(gg); send(gg);
+      o.start(t); o2.start(t); o3.start(t); o.stop(t+dur+0.05); o2.stop(t+dur+0.05); o3.stop(t+dur+0.05);
+    }
+    [32.70,49.00,73.42,110.00,164.81].forEach(function(f,i){ voice(f, tp+i*0.05, 3.1-i*0.14, 0.13-i*0.009); });
+    [329.63,493.88,659.25].forEach(function(f,i){ voice(f, tp+0.45+i*0.16, 2.0, 0.03); });
+    master.gain.setValueAtTime(0.20,tp+3.2);
+    master.gain.exponentialRampToValueAtTime(0.0001,tp+4.2);
     setTimeout(function(){try{ac.close();}catch(e){}},6000);
     }
     if(ac.state==='running'){ schedule(); }
