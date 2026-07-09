@@ -784,6 +784,7 @@ import { getDatabase, ref, child, set, get, onValue, push, remove } from "https:
   };
 
   var LOG_MAX_ENTRIES = 200;
+  var LOG_TRIM_THRESHOLD = 300; // once the server-side log grows past this, trim oldest back to LOG_MAX_ENTRIES
 
   function pushLog(action, name, detail) {
     if (!logDbRef) return;
@@ -802,6 +803,22 @@ import { getDatabase, ref, child, set, get, onValue, push, remove } from "https:
   }
 
   var logEntries = [];
+
+  // pushLog() appends with push() (never overwrites the array) which fixed the concurrent-log
+  // loss, but the server node would then grow forever. Trim it back here: only push-id keyed
+  // children (not the legacy numeric-array log) are eligible, so old array logs are left intact.
+  // Firebase push ids sort lexicographically in chronological order, so the smallest keys are the
+  // oldest. remove() is idempotent, so if several clients trim at once the extra removes are no-ops.
+  function trimRemoteLog(rawVal) {
+    if (!logDbRef || !rawVal || typeof rawVal !== "object" || Array.isArray(rawVal)) return;
+    var pushKeys = Object.keys(rawVal).filter(function (k) { return !/^\d+$/.test(k); });
+    if (pushKeys.length <= LOG_TRIM_THRESHOLD) return;
+    pushKeys.sort();
+    var removeCount = pushKeys.length - LOG_MAX_ENTRIES;
+    for (var i = 0; i < removeCount; i++) {
+      remove(child(logDbRef, pushKeys[i])).catch(function () {});
+    }
+  }
 
   // Reads both storage shapes: the legacy whole-array node AND the new id->entry object map
   // (see writeEntry/migrateLegacyRankingNode). Firebase only returns an Array when every key is
@@ -1683,8 +1700,10 @@ import { getDatabase, ref, child, set, get, onValue, push, remove } from "https:
     logDbRef = ref(db, "rooms/" + code + "/farmRankingLog");
     logListenerUnsub = onValue(logDbRef, function (snapshot) {
       try {
-        logEntries = normalizeRemoteValue(snapshot.val());
+        var rawLog = snapshot.val();
+        logEntries = normalizeRemoteValue(rawLog);
         renderLog();
+        trimRemoteLog(rawLog);
       } catch (err) {
         console.error("log onValue failed:", err);
       }
