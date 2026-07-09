@@ -508,7 +508,7 @@
       <input type="number" id="f-kills" placeholder="キル" min="0" />
       <input type="number" id="f-deaths" placeholder="デス" min="0" />
       <input type="number" id="f-playtime" placeholder="プレイ時間(h)" min="0" step="0.1" />
-      <button class="btn-ghost" id="f-playtime-fetch-btn" type="button" title="敵チーム監視でBattleMetrics IDが紐付いていれば自動取得できる">⏱ 自動取得</button>
+      <button class="btn-ghost" id="f-playtime-fetch-btn" type="button" title="BattleMetricsからプレイ時間を自動取得（味方も可・名前で検索。敵チーム監視でBM IDをリンク済みならより正確）">⏱ 自動取得</button>
       <button id="f-submit-btn" type="button">＋ 追加</button>
       <button id="f-cancel-btn" type="button" hidden>キャンセル</button>
     </div>
@@ -552,7 +552,7 @@
   </section>
 
   <footer>
-    <strong>データソース：</strong> 木・石・金属鉱石・硫黄・上金・皮・脂肪・骨、およびキル・デスは<a href="https://rustoria.co/leaderboards" target="_blank" rel="noopener">rustoria.co/leaderboards</a>を見て手入力（コピペ解析は資源のみ対応、🌾自動取得は資源8種＋キル・デスの両方に対応）。プレイ時間は敵チーム監視でBattleMetrics IDが紐付いていれば「⏱ 自動取得」で取得できる。<br />
+    <strong>データソース：</strong> 木・石・金属鉱石・硫黄・上金・皮・脂肪・骨、およびキル・デスは<a href="https://rustoria.co/leaderboards" target="_blank" rel="noopener">rustoria.co/leaderboards</a>を見て手入力（コピペ解析は資源のみ対応、🌾自動取得は資源8種＋キル・デスの両方に対応）。プレイ時間は「⏱ 自動取得」でBattleMetricsから取得できる（味方も可・名前で検索。敵チーム監視でBM IDをリンク済みならより正確）。<br />
     <strong>サーバー：</strong> 上部のプルダウンでrustoria.coが運営する約26サーバーから選べる（既定はVanilla Main US）。選んだサーバーの資源・PvP・ワイプ一覧を取得する。選択は端末に記憶される。<br />
     <strong>シーズン（ワイプ）：</strong> サーバーごとの実際のワイプ履歴から選べる。選んだワイプの記録だけが表に表示され、追加した記録もそのサーバー・ワイプに紐付く（ワイプごとに資源量がリセットされるため、同じ人でもワイプが変われば新しい行として記録される）。<br />
     <strong>仕組み：</strong> 入力したデータは敵チーム監視ツールと同じルームにリアルタイム保存され、同じルームコードを知っている人全員と共有・編集できる。列見出しをクリックするとその項目で並び替えられる。合計ファーム・プレイ時間の横のアイコン（🌾📋⏱🧮）はその数値の取得元を表す。「🕘 更新履歴を見る」で誰が何をいつ追加・更新・削除したかを確認できる。削除ボタンは確認ダイアログを経ないと実行されない。
@@ -1491,10 +1491,32 @@ import { getDatabase, ref, child, set, get, onValue, push, remove } from "https:
     return step();
   }
 
+  // 敵チーム監視（index.html）と同じBattleMetrics名前検索でBM IDを解決する。これにより
+  // 味方＝敵監視に登録していないメンバーでもプレイ時間を自動取得できる。完全一致（大文字
+  // 小文字無視）を優先し、同名が複数いる場合は「曖昧」として特定しない（別人のプレイ時間を
+  // 誤って拾わないため）。検索はランキング側が既に叩いているBattleMetrics公開APIを使う。
+  function findBmIdByNameSearch(name, bmServerId) {
+    var url = "https://api.battlemetrics.com/players?filter%5Bsearch%5D=" + encodeURIComponent(name) +
+      "&filter%5Bservers%5D=" + bmServerId + "&page%5Bsize%5D=10";
+    return fetchWithTimeout(url).then(function (res) {
+      if (!res.ok) throw new Error("BM player search failed: " + res.status);
+      return res.json();
+    }).then(function (json) {
+      var rows = (json.data || []).filter(function (p) { return p && p.id && p.attributes && p.attributes.name; });
+      var lc = name.toLowerCase();
+      var exact = rows.filter(function (p) { return p.attributes.name.toLowerCase() === lc; });
+      if (exact.length === 1) return { id: exact[0].id };
+      if (exact.length > 1) return { ambiguous: true, count: exact.length };
+      if (rows.length === 1) return { id: rows[0].id };
+      if (rows.length > 1) return { ambiguous: true, count: rows.length };
+      return null;
+    });
+  }
+
   document.getElementById("f-playtime-fetch-btn").addEventListener("click", function () {
     var name = document.getElementById("f-name").value.trim();
     if (!name) {
-      toast("⚠ 先に名前を入力してほしい（敵チーム監視に登録済みの名前と一致させる必要がある）");
+      toast("⚠ 先に名前を入力してほしい（BattleMetrics上の表示名と一致させてほしい）");
       return;
     }
     // Only fetch when the selected resource server has a verified BattleMetrics counterpart.
@@ -1508,15 +1530,21 @@ import { getDatabase, ref, child, set, get, onValue, push, remove } from "https:
       toast("⚠ 連続クリックを防ぐため少し待ってほしい（数秒後に再試行できる）");
       return;
     }
-    var bmId = memberBmIdByName[name.toLowerCase()];
-    if (!bmId) {
-      toast("⚠ このメンバーは敵チーム監視でBattleMetrics IDがまだ紐付いていない（そちらで名前検索してリンクしてほしい）");
-      return;
-    }
     var btn = document.getElementById("f-playtime-fetch-btn");
     btn.disabled = true;
     btn.textContent = "検索中…";
-    findPlaytimeSecondsByBmId(bmId, bmServerId).then(function (seconds) {
+    // 敵チーム監視で紐付いていればそのBM IDを使う（最も正確）。味方など未紐付けの場合は
+    // BattleMetricsを名前検索してBM IDを解決してから取得する（＝味方も自動取得の対象になる）。
+    var linkedBmId = memberBmIdByName[name.toLowerCase()];
+    (linkedBmId ? Promise.resolve({ id: linkedBmId }) : findBmIdByNameSearch(name, bmServerId)).then(function (r) {
+      if (r && r.ambiguous) {
+        toast("⚠ 同名のプレイヤーが" + r.count + "人いてBM IDを特定できない。敵チーム監視で名前検索してリンクすると正確に取れる");
+        return "STOP";
+      }
+      if (!r || !r.id) return null;
+      return findPlaytimeSecondsByBmId(r.id, bmServerId);
+    }).then(function (seconds) {
+      if (seconds === "STOP") return;
       if (seconds != null) {
         var hours = Math.round((seconds / 3600) * 10) / 10;
         document.getElementById("f-playtime").value = hours;
