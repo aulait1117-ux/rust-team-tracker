@@ -571,6 +571,7 @@
     <div class="room-modal-row">
       <input type="text" id="room-create-password-input" placeholder="このルーム専用のパスワードを決める" autocomplete="off" />
     </div>
+    <p style="font-size:11.5px; color:var(--text-faint); margin:0 0 10px;">※ このパスワードは簡易的な目隠しで、本格的なアクセス制御ではありません（ルームコードを知る人には見えます）。機密情報は入れないでください。</p>
     <div class="room-modal-row">
       <button class="btn-ghost" id="room-create-btn" type="button">🆕 新しいルームを作る</button>
     </div>
@@ -591,12 +592,13 @@
       <button class="btn-ghost" id="lock-gate-submit-btn" type="button">解除</button>
     </div>
     <div class="lock-gate-error" id="lock-gate-error" hidden>違います</div>
+    <p style="font-size:11px; color:var(--text-faint); margin:12px 0 0; line-height:1.5;">※ 簡易的な目隠しです。本格的なアクセス制御ではありません。</p>
   </div>
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
-import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-database.js";
+import { getDatabase, ref, child, set, get, onValue, push, remove } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-database.js";
 
 (function () {
   "use strict";
@@ -618,8 +620,16 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
   var firebaseApp = initializeApp(firebaseConfig);
   var db = getDatabase(firebaseApp);
 
-  var BM_SERVER_ID = "6324892"; // Rustoria US Main, same server index.html tracks
+  // BattleMetrics server id per Rustoria (resource) server. Only the US Main correspondence is
+  // verified, so playtime auto-fetch is limited to servers listed here: querying an arbitrary
+  // BM leaderboard for a different server would surface plausible-but-wrong playtime (R2).
+  // For any server not in this map, playtime auto-fetch is disabled and manual entry is asked for.
+  var BM_SERVER_ID_BY_RUSTORIA = {
+    vanilla_main_us: "6324892" // Rustoria US Main, same server index.html tracks by default
+  };
   var BM_PLAYTIME_PAGE_CAP = 20; // ~100 players/page -> searches roughly the top 2000 by playtime
+  var PLAYTIME_FETCH_COOLDOWN_MS = 3000; // matches the resources fetch debounce (R9)
+  var playtimeFetchCooldownUntil = 0;
 
   // api.rustoria.co has no Access-Control-Allow-Origin header, so it can't be called directly
   // from this page. This Cloudflare Worker fetches it server-side and re-serves the same
@@ -675,6 +685,8 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     });
   }
 
+  var passwordGateCleanup = null;
+
   function showPasswordGate(code, requiredPassword, onSuccess) {
     var backdrop = document.getElementById("lock-gate-backdrop");
     var title = document.getElementById("lock-gate-title");
@@ -682,6 +694,11 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     var input = document.getElementById("lock-gate-input");
     var submitBtn = document.getElementById("lock-gate-submit-btn");
     var errorEl = document.getElementById("lock-gate-error");
+
+    // If the gate was shown before and dismissed without a successful unlock (e.g. the user hit
+    // "switch room" again), its listeners are still attached. Remove them first so we don't stack
+    // duplicate handlers on the shared submit button / input (R8).
+    if (passwordGateCleanup) { passwordGateCleanup(); passwordGateCleanup = null; }
 
     if (title) title.textContent = "🔒 ルーム「" + code + "」";
     if (desc) desc.textContent = "このルーム専用のパスワードを入力してください。";
@@ -710,6 +727,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
         input.removeEventListener("keydown", onKeydown);
         input.removeEventListener("input", onInput);
       }
+      passwordGateCleanup = null;
     }
 
     if (submitBtn) submitBtn.addEventListener("click", attempt);
@@ -717,6 +735,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       input.addEventListener("keydown", onKeydown);
       input.addEventListener("input", onInput);
     }
+    passwordGateCleanup = cleanup;
   }
 
   var roomCode = null;
@@ -769,21 +788,43 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
   function pushLog(action, name, detail) {
     if (!logDbRef) return;
     var entry = { ts: Date.now(), action: action, name: name, detail: detail || "" };
+    // push() appends under an auto-generated chronological key instead of rewriting the whole
+    // log array, so two clients logging at the same moment no longer clobber each other (R1).
+    push(logDbRef, entry).catch(function () {
+      toast("⚠ 履歴の保存に失敗した（画面上の操作自体は反映済み）");
+    });
+    // Optimistic local update; the onValue listener reconciles with the authoritative server
+    // state (incl. other clients' concurrent entries) on the next snapshot.
     var next = logEntries.concat([entry]);
     if (next.length > LOG_MAX_ENTRIES) next = next.slice(next.length - LOG_MAX_ENTRIES);
     logEntries = next;
-    set(logDbRef, logEntries).catch(function () {
-      toast("⚠ 履歴の保存に失敗した（画面上の操作自体は反映済み）");
-    });
     renderLog();
   }
 
   var logEntries = [];
 
+  // Reads both storage shapes: the legacy whole-array node AND the new id->entry object map
+  // (see writeEntry/migrateLegacyRankingNode). Firebase only returns an Array when every key is
+  // a contiguous 0..N integer, which only the legacy shape produces; the map's "e-..." keys
+  // always come back as a plain object. Falsy children are dropped either way.
   function normalizeRemoteValue(val) {
     if (Array.isArray(val)) return val.filter(Boolean);
-    if (val && typeof val === "object") return Object.keys(val).map(function (k) { return val[k]; });
+    if (val && typeof val === "object") {
+      return Object.keys(val).map(function (k) { return val[k]; }).filter(Boolean);
+    }
     return [];
+  }
+
+  // A legacy node is a whole-array write: an Array, or an object whose keys are all numeric
+  // ("0","1",...). The new per-entry writes key children by the entry's own "e-..." id.
+  function isLegacyRankingShape(raw) {
+    if (raw == null) return false;
+    if (Array.isArray(raw)) return true;
+    if (typeof raw === "object") {
+      var keys = Object.keys(raw);
+      if (keys.length && keys.every(function (k) { return /^\d+$/.test(k); })) return true;
+    }
+    return false;
   }
 
   function computeTotal(e) {
@@ -809,11 +850,49 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     return null;
   }
 
-  function syncEntriesToFirebase() {
-    if (!rankingDbRef) return;
-    set(rankingDbRef, entries).catch(function () {
+  function entriesToMap() {
+    var map = {};
+    entries.forEach(function (e) { if (e && e.id) map[e.id] = e; });
+    return map;
+  }
+
+  // Write a single entry to its own child (keyed by entry.id) instead of overwriting the whole
+  // node, so a concurrent edit to a different entry is never lost (R1).
+  function writeEntry(entry) {
+    if (!rankingDbRef || !entry || !entry.id) return;
+    set(child(rankingDbRef, entry.id), entry).catch(function () {
       toast("⚠ クラウド同期に失敗した（このデバイスの画面には反映済み）");
     });
+  }
+  function removeEntryRemote(id) {
+    if (!rankingDbRef || !id) return;
+    remove(child(rankingDbRef, id)).catch(function () {
+      toast("⚠ クラウド同期に失敗した（このデバイスの画面には反映済み）");
+    });
+  }
+
+  // Whole-node write, kept only for the one-time legacy->map migration and the (now unused)
+  // seed path. Writes the id-keyed map shape, never the legacy array.
+  function syncEntriesToFirebase() {
+    if (!rankingDbRef) return;
+    set(rankingDbRef, entriesToMap()).catch(function () {
+      toast("⚠ クラウド同期に失敗した（このデバイスの画面には反映済み）");
+    });
+  }
+
+  // One-time in place migration: rewrite a legacy whole-array node as an id-keyed map so later
+  // per-entry writes don't collide with the old numeric-index children (which would otherwise
+  // linger and read back as duplicates). Runs on first snapshot only; idempotent across clients
+  // since every client derives the same map from the same stored data.
+  function migrateLegacyRankingNode(list) {
+    if (!rankingDbRef) return;
+    var map = {};
+    list.forEach(function (e) {
+      if (!e) return;
+      if (!e.id) e.id = makeId();
+      map[e.id] = e;
+    });
+    set(rankingDbRef, map).catch(function () { /* non-fatal: reads still work from the array */ });
   }
 
   var memberBmIdByName = {};
@@ -860,6 +939,11 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
   }
 
   function formatNum(n) { return Math.round(n || 0).toLocaleString("en-US"); }
+  // Playtime is fractional (e.g. 12.5h); keep one decimal instead of rounding it away (R10).
+  // Stored value is untouched -- this only affects display.
+  function formatHours(n) {
+    return (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 1 });
+  }
   function formatKD(n) { return (n || 0).toFixed(2); }
   function formatUpdated(ts) {
     if (!ts) return "--";
@@ -961,7 +1045,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
   }
 
   function fetchServersList() {
-    return fetch(RUSTORIA_PROXY_URL + "/servers").then(function (res) {
+    return fetchWithTimeout(RUSTORIA_PROXY_URL + "/servers").then(function (res) {
       if (!res.ok) throw new Error("servers request failed: " + res.status);
       return res.json();
     }).then(function (servers) {
@@ -1003,16 +1087,24 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     renderTable();
   }
 
+  // Monotonic request token: switching servers quickly fires several /wipes requests, and a
+  // slow earlier one could otherwise resolve last and overwrite the newest server's list. Only
+  // the most recent request (matching wipesRequestSeq) is allowed to apply its result (R5).
+  var wipesRequestSeq = 0;
+
   function fetchWipesList() {
-    return fetch(RUSTORIA_PROXY_URL + "/wipes?server=" + encodeURIComponent(selectedServer)).then(function (res) {
+    var seq = ++wipesRequestSeq;
+    return fetchWithTimeout(RUSTORIA_PROXY_URL + "/wipes?server=" + encodeURIComponent(selectedServer)).then(function (res) {
       if (!res.ok) throw new Error("wipes request failed: " + res.status);
       return res.json();
     }).then(function (wipes) {
+      if (seq !== wipesRequestSeq) return; // a newer server selection superseded this request
       if (!Array.isArray(wipes) || !wipes.length) throw new Error("empty wipes list");
       wipesList = wipes;
       populateWipeSelect(wipesList);
       selectWipe(wipesList[0]);
     }).catch(function (err) {
+      if (seq !== wipesRequestSeq) return; // stale request: leave the newest one's result intact
       console.error("wipes fetch failed:", err);
       // Fall back to a single synthetic option so the tool still works even if
       // rustoria.co/the proxy is unreachable -- just without real wipe history.
@@ -1074,6 +1166,10 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       var resourceTitle = "取得元: " + (SOURCE_LABELS[e.resourceSource] || "手入力");
       var playtimeIcon = SOURCE_ICONS[e.playtimeSource] || "";
       var playtimeTitle = "取得元: " + (SOURCE_LABELS[e.playtimeSource] || "手入力");
+      // K/D display: with 0 deaths, showing the raw kill count is misleading. Show ∞ when there
+      // are kills but no deaths, and 0.00 when neither (R11). Sort still uses computeKD unchanged.
+      var deathsN = e.deaths || 0, killsN = e.kills || 0;
+      var kdDisplay = deathsN === 0 ? (killsN > 0 ? "∞" : "0.00") : formatKD(computeKD(e));
       return (
         '<tr>' +
         '<td class="rank-cell ' + rankClass + '">' + rankLabel + '</td>' +
@@ -1089,12 +1185,12 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
         '<td class="total-cell" title="' + escapeHtml(resourceTitle) + '">' + formatNum(computeTotal(e)) + (resourceIcon ? ' <span class="source-icon">' + resourceIcon + '</span>' : '') + '</td>' +
         '<td>' + formatNum(e.kills) + '</td>' +
         '<td>' + formatNum(e.deaths) + '</td>' +
-        '<td>' + formatKD(computeKD(e)) + '</td>' +
-        '<td title="' + escapeHtml(playtimeTitle) + '">' + formatNum(e.playtimeHours) + 'h' + (playtimeIcon ? ' <span class="source-icon">' + playtimeIcon + '</span>' : '') + '</td>' +
+        '<td>' + kdDisplay + '</td>' +
+        '<td title="' + escapeHtml(playtimeTitle) + '">' + formatHours(e.playtimeHours) + 'h' + (playtimeIcon ? ' <span class="source-icon">' + playtimeIcon + '</span>' : '') + '</td>' +
         '<td class="updated-cell">' + formatUpdated(e.updatedAt) + '</td>' +
         '<td><div class="row-actions">' +
-        '<button class="edit" data-id="' + e.id + '" title="編集">✏️</button>' +
-        '<button class="del" data-id="' + e.id + '" title="削除">🗑</button>' +
+        '<button class="edit" data-id="' + escapeHtml(e.id) + '" title="編集">✏️</button>' +
+        '<button class="del" data-id="' + escapeHtml(e.id) + '" title="削除">🗑</button>' +
         '</div></td>' +
         '</tr>'
       );
@@ -1201,7 +1297,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     if (!e) return;
     if (!window.confirm("削除する？\n\n" + e.name + " の記録を削除します。この操作は取り消せません。")) return;
     entries = entries.filter(function (x) { return x.id !== id; });
-    syncEntriesToFirebase();
+    removeEntryRemote(id);
     renderTable();
     pushLog("delete", e.name, "");
     if (editingId === id) cancelEdit();
@@ -1228,7 +1324,11 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       if (existing) {
         Object.assign(existing, form);
         existing.updatedAt = Date.now();
+        writeEntry(existing);
         pushLog("update", existing.name, describeSource(form));
+      } else {
+        // The record was deleted remotely (by another client) while it was open for editing (R13).
+        toast("⚠ この記録は他のデバイスで削除されたため更新できなかった");
       }
     } else {
       // Steam ID uniquely identifies a person, so a match there is trusted as "same person".
@@ -1242,6 +1342,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       if (bySteamId) {
         Object.assign(bySteamId, form);
         bySteamId.updatedAt = Date.now();
+        writeEntry(bySteamId);
         toast("同じSteam IDの記録を更新した（" + bySteamId.name + "）");
         pushLog("update", bySteamId.name, describeSource(form) + "（Steam ID一致）");
       } else {
@@ -1252,10 +1353,10 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
         form.id = makeId();
         form.updatedAt = Date.now();
         entries.push(form);
+        writeEntry(form);
         pushLog("add", form.name, describeSource(form));
       }
     }
-    syncEntriesToFirebase();
     renderTable();
     cancelEdit();
   });
@@ -1282,12 +1383,24 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       if (!m) return null;
       return Number(m[1].replace(/,/g, ""));
     }
+    // Metal ore vs. HQ metal ore share the same tail ("Metal Ore Harvested"). The old code used a
+    // negative lookbehind (?<!HQ\s) which (a) throws a SyntaxError -- stopping this whole module --
+    // on engines without lookbehind support, and (b) mis-read "HQ  Metal" (two spaces) as plain
+    // metal ore. Instead, scan every occurrence with an optional "HQ" prefix (\s+ = any run of
+    // whitespace) and bucket by whether that prefix was present -- no lookbehind needed (R12).
+    var metalOre = null, hqm = null;
+    var metalRe = /(HQ\s+)?Metal\s*Ore\s*Harvested[^\d]{0,20}([\d,]+)/gi;
+    var mm;
+    while ((mm = metalRe.exec(text)) !== null) {
+      var val = Number(mm[2].replace(/,/g, ""));
+      if (mm[1]) hqm = val; else metalOre = val;
+    }
     return {
       wood: findNum(/Wood\s*Harvested[^\d]{0,20}([\d,]+)/i),
       stone: findNum(/Stones?\s*Harvested[^\d]{0,20}([\d,]+)/i),
-      metalOre: findNum(/(?<!HQ\s)Metal\s*Ore\s*Harvested[^\d]{0,20}([\d,]+)/i),
+      metalOre: metalOre,
       sulfur: findNum(/Sulfur\s*Ore\s*Harvested[^\d]{0,20}([\d,]+)/i),
-      hqm: findNum(/HQ\s*Metal\s*Ore\s*Harvested[^\d]{0,20}([\d,]+)/i),
+      hqm: hqm,
       leather: findNum(/Leather\s*Harvested[^\d]{0,20}([\d,]+)/i),
       fat: findNum(/Animal\s*Fat\s*Harvested[^\d]{0,20}([\d,]+)/i),
       bone: findNum(/Bone\s*Fragments\s*Harvested[^\d]{0,20}([\d,]+)/i)
@@ -1327,13 +1440,24 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
   // Anonymous access only lists top players (no direct single-player lookup), so this pages
   // through the ranking looking for a matching BattleMetrics player id -- the same id already
   // linked per member in the enemy-watch tool (index.html) for online-status tracking.
-  function findPlaytimeSecondsByBmId(bmId) {
-    var url = "https://api.battlemetrics.com/servers/" + BM_SERVER_ID +
+  // Every network call goes through this so a hung/unreachable endpoint aborts after a bounded
+  // wait instead of leaving a button stuck on "検索中…" forever (R4). AbortError surfaces to the
+  // caller's .catch(); the caller's .finally() re-enables its button.
+  var FETCH_TIMEOUT_MS = 10000;
+  function fetchWithTimeout(url, options) {
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, FETCH_TIMEOUT_MS);
+    var opts = Object.assign({}, options || {}, { signal: controller.signal });
+    return fetch(url, opts).finally(function () { clearTimeout(timer); });
+  }
+
+  function findPlaytimeSecondsByBmId(bmId, bmServerId) {
+    var url = "https://api.battlemetrics.com/servers/" + bmServerId +
       "/relationships/leaderboards/time?filter%5Bperiod%5D=AT&page%5Bsize%5D=100";
     var page = 0;
     function step() {
       page++;
-      return fetch(url).then(function (res) {
+      return fetchWithTimeout(url).then(function (res) {
         if (!res.ok) throw new Error("BM leaderboard request failed: " + res.status);
         return res.json();
       }).then(function (json) {
@@ -1356,6 +1480,17 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       toast("⚠ 先に名前を入力してほしい（敵チーム監視に登録済みの名前と一致させる必要がある）");
       return;
     }
+    // Only fetch when the selected resource server has a verified BattleMetrics counterpart.
+    // For any other server the BM leaderboard would be a different server's data (R2).
+    var bmServerId = BM_SERVER_ID_BY_RUSTORIA[selectedServer];
+    if (!bmServerId) {
+      toast("⚠ このサーバーはプレイ時間の自動取得に未対応。プレイ時間は手入力してほしい");
+      return;
+    }
+    if (Date.now() < playtimeFetchCooldownUntil) {
+      toast("⚠ 連続クリックを防ぐため少し待ってほしい（数秒後に再試行できる）");
+      return;
+    }
     var bmId = memberBmIdByName[name.toLowerCase()];
     if (!bmId) {
       toast("⚠ このメンバーは敵チーム監視でBattleMetrics IDがまだ紐付いていない（そちらで名前検索してリンクしてほしい）");
@@ -1364,7 +1499,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     var btn = document.getElementById("f-playtime-fetch-btn");
     btn.disabled = true;
     btn.textContent = "検索中…";
-    findPlaytimeSecondsByBmId(bmId).then(function (seconds) {
+    findPlaytimeSecondsByBmId(bmId, bmServerId).then(function (seconds) {
       if (seconds != null) {
         var hours = Math.round((seconds / 3600) * 10) / 10;
         document.getElementById("f-playtime").value = hours;
@@ -1384,10 +1519,15 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       toast("✓ プレイ時間を推定取得した（" + localHours + "時間、敵チーム監視のローカル記録から計算。±45秒の誤差あり）");
     }).catch(function (err) {
       console.error("playtime fetch failed:", err);
-      toast("⚠ BattleMetricsへの問い合わせに失敗した");
+      if (err && err.name === "AbortError") {
+        toast("⚠ BattleMetricsの応答がなくタイムアウトした（時間をおいて再試行してほしい）");
+      } else {
+        toast("⚠ BattleMetricsへの問い合わせに失敗した");
+      }
     }).finally(function () {
       btn.disabled = false;
       btn.textContent = "⏱ 自動取得";
+      playtimeFetchCooldownUntil = Date.now() + PLAYTIME_FETCH_COOLDOWN_MS;
     });
   });
 
@@ -1408,7 +1548,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
 
   function fetchBundle(route, name) {
     var url = RUSTORIA_PROXY_URL + route + "?" + rustoriaQueryParams(name);
-    return fetch(url).then(function (res) {
+    return fetchWithTimeout(url).then(function (res) {
       if (!res.ok) throw new Error("proxy request failed: " + res.status);
       return res.json();
     }).then(function (json) {
@@ -1508,7 +1648,11 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       }
     }).catch(function (err) {
       console.error("resources/pvp fetch failed:", err);
-      toast("⚠ rustoria.coへの問い合わせに失敗した");
+      if (err && err.name === "AbortError") {
+        toast("⚠ rustoria.coの応答がなくタイムアウトした（時間をおいて再試行してほしい）");
+      } else {
+        toast("⚠ rustoria.coへの問い合わせに失敗した");
+      }
     }).finally(function () {
       btn.disabled = false;
       btn.textContent = "🌾 自動取得";
@@ -1526,6 +1670,16 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     if (teamsListenerUnsub) { teamsListenerUnsub(); teamsListenerUnsub = null; }
     if (logListenerUnsub) { logListenerUnsub(); logListenerUnsub = null; }
 
+    // Clear the previous room's in-memory data before subscribing to the new one, so switching
+    // rooms (or creating a new one) never carries the old room's rows/log into the new room and
+    // never re-seeds them into a fresh room (R3/R15). The onValue snapshot below repopulates.
+    entries = [];
+    logEntries = [];
+    editingId = null;
+    cancelEdit();
+    renderTable();
+    renderLog();
+
     logDbRef = ref(db, "rooms/" + code + "/farmRankingLog");
     logListenerUnsub = onValue(logDbRef, function (snapshot) {
       try {
@@ -1540,9 +1694,15 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     var firstSnapshot = true;
     rankingListenerUnsub = onValue(rankingDbRef, function (snapshot) {
       try {
-        var remote = normalizeRemoteValue(snapshot.val());
+        var raw = snapshot.val();
+        var remote = normalizeRemoteValue(raw);
         if (firstSnapshot) {
           firstSnapshot = false;
+          // One-time migration: convert a legacy whole-array node into the id-keyed map shape so
+          // subsequent per-entry writes don't collide with lingering numeric-index children (R1).
+          if (isLegacyRankingShape(raw) && remote.length > 0) {
+            migrateLegacyRankingNode(remote);
+          }
           if (seedIfEmpty && remote.length === 0 && entries.length > 0) {
             syncEntriesToFirebase();
             renderTable();
@@ -1590,7 +1750,9 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     var code = generateRoomCode();
     set(ref(db, "rooms/" + code + "/password"), pw).then(function () {
       document.getElementById("room-modal-backdrop").hidden = true;
-      unlockAppAndConnect(code, true);
+      // A brand-new room starts empty; there is no local seed data to copy in, and passing true
+      // here previously duplicated the just-left room's rows into the new room (R3).
+      unlockAppAndConnect(code, false);
     }).catch(function () {
       toast("⚠ ルーム作成に失敗した");
     });
@@ -1611,10 +1773,18 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     if (e.key === "Enter") { e.preventDefault(); document.getElementById("room-join-btn").click(); }
   });
   document.getElementById("room-copy-btn").addEventListener("click", function () {
-    try {
-      navigator.clipboard.writeText(roomCode || "");
-      toast("📋 ルームコードをコピーした");
-    } catch (e) { /* clipboard unavailable */ }
+    var code = roomCode || "";
+    // writeText returns a Promise that rejects (e.g. permission denied, insecure context) rather
+    // than throwing synchronously, so a try/catch would still report a false "copied" (R14).
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(function () {
+        toast("📋 ルームコードをコピーした");
+      }).catch(function () {
+        toast("⚠ コピーできなかった（コード：" + code + " を手動でコピーしてほしい）");
+      });
+    } else {
+      toast("⚠ このブラウザではコピーに対応していない（コード：" + code + "）");
+    }
   });
   document.getElementById("room-switch-btn").addEventListener("click", function () {
     var input = document.getElementById("room-join-input");

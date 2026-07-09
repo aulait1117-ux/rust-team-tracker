@@ -723,7 +723,9 @@
     <strong>データソース：</strong> オンライン人数・プレイヤー名簿はBattleMetrics公開APIから取得（無料・APIキー不要）。<br />
     <strong>仕組み：</strong> Rustの「チーム」所属情報はゲーム内部のプライベートな状態であり公開APIでは取得できないため、
     敵チームの自動検出は行わない。ここに手動登録したプレイヤー名が、現在サーバーにオンラインかどうかだけを
-    自動確認する。データはブラウザ内のみに保存。
+    自動確認する。<br />
+    <strong>データの保存先：</strong> ルームに接続している間は、チーム構成・メンバー・拠点写真がクラウド（Firebase）経由で
+    同じルームコードを知る全員とリアルタイム共有される。ルーム未接続時はこのブラウザ内のみに保存。
   </footer>
 </div>
 
@@ -832,6 +834,7 @@
         <ul>
           <li>各チームカード内の貼り付け欄をクリックして選択し、Ctrl+Vでスクリーンショットをそのまま貼り付けられる（ファイル選択でも追加可）。</li>
           <li>サムネイルをクリックすると拡大表示、×ボタンで削除できる。</li>
+          <li>貼り付けた写真はルーム接続中、同じルームの全員に共有される（クラウド同期される）。共有したくない画像は貼り付けないこと。</li>
         </ul>
       </section>
       <section>
@@ -1032,6 +1035,13 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     var submitBtn = document.getElementById("lock-gate-submit-btn");
     var errorEl = document.getElementById("lock-gate-error");
 
+    // I7: these are persistent DOM elements. Every showPasswordGate() call used to bind a fresh set
+    // of closures to them and only unbound on success, so repeated gate displays (e.g. switching
+    // rooms, wrong password then reopen) leaked listeners that piled up. Replacing each control with
+    // a clone drops ALL previously-attached listeners before we bind the current invocation's.
+    if (input && input.parentNode) { var freshInput = input.cloneNode(true); input.parentNode.replaceChild(freshInput, input); input = freshInput; }
+    if (submitBtn && submitBtn.parentNode) { var freshBtn = submitBtn.cloneNode(true); submitBtn.parentNode.replaceChild(freshBtn, submitBtn); submitBtn = freshBtn; }
+
     if (title) title.textContent = "🔒 ルーム「" + code + "」";
     if (desc) desc.textContent = "このルーム専用のパスワードを入力してください。";
     if (input) input.value = "";
@@ -1071,6 +1081,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
   var roomCode = null;
   var teamsDbRef = null;
   var teamsListenerUnsub = null;
+  var pendingImportPayload = null; // teams imported from a #share= link before a room was connected
 
   function normalizeRemoteTeamsValue(val) {
     if (Array.isArray(val)) return val;
@@ -1146,30 +1157,45 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       // and render data that may have an older/unexpected shape (synced from a client running a
       // previous version of this file). onValue() does not surface a thrown error from this
       // callback anywhere visible, so without this try/catch a single bad field would silently
-      // abort the whole callback -- including the refreshTeamStatuses() call at the end -- leaving
-      // every member's status stuck at "--" forever with no visible error except in devtools.
+      // abort the whole callback, leaving every member's status stuck at "--" forever with no
+      // visible error except in devtools. (BattleMetrics polling runs on its own timer, so it is
+      // unaffected either way -- see the note at the end of the try block.)
       try {
         var remoteTeams = normalizeRemoteTeamsValue(snapshot.val());
+        var wasFirstSnapshot = firstSnapshot;
         if (firstSnapshot) {
           firstSnapshot = false;
           if (seedIfEmpty && remoteTeams.length === 0 && teamsState.teams.length > 0) {
+            // Empty room + we already have local teams: seed them up. (No fetch here -- polling
+            // is driven solely by the scheduleNextTeamsRefresh timer started at init; see I1.)
+            pendingImportPayload = null;
             syncTeamsToFirebase();
             renderTeamsList();
-            refreshTeamStatuses();
             return;
           }
         }
         applyRemoteTeams(remoteTeams);
         renderTeamsList();
-        refreshTeamStatuses();
+        if (wasFirstSnapshot && pendingImportPayload) {
+          // Teams imported from a #share= link before this room was (re)connected would be wiped
+          // by applyRemoteTeams() above. Re-merge them so a reconnect doesn't silently drop them;
+          // mergeSharedPayload() dedups and pushes the merged result back up to the room (and
+          // re-renders itself only if it actually added anything).
+          var imp = pendingImportPayload;
+          pendingImportPayload = null;
+          mergeSharedPayload(imp);
+        }
+        // NOTE: refreshTeamStatuses() is intentionally NOT called here. BattleMetrics polling is
+        // driven solely by the scheduleNextTeamsRefresh timer (started at init) so that a burst of
+        // Firebase snapshots can't hammer the public API into HTTP 429 across every connected
+        // device. renderTeamsList() only redraws already-known state; the next scheduled poll (and
+        // its throttle guard) refreshes online status.
       } catch (err) {
         console.error("onValue callback failed:", err);
         if (Date.now() - lastOnValueErrorToastAt > 120000) {
           toast("⚠ 同期データの読み込みで問題が発生した（オンライン状況の確認は継続する）");
           lastOnValueErrorToastAt = Date.now();
         }
-        // Guarantee the status poll keeps running even though rendering/parsing hit a snag above.
-        refreshTeamStatuses();
       }
     }, function () {
       toast("⚠ クラウド接続に失敗した（ローカル保存のみで継続）");
@@ -1187,6 +1213,8 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
   }
 
   document.getElementById("room-create-btn").addEventListener("click", function () {
+    var btn = this;
+    if (btn.disabled) return; // I10: guard against double-click creating orphan rooms
     var pwInput = document.getElementById("room-create-password-input");
     var pw = pwInput.value.trim();
     if (!pw) {
@@ -1195,22 +1223,33 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       return;
     }
     var code = generateRoomCode();
+    btn.disabled = true;
     set(ref(db, "rooms/" + code + "/password"), pw).then(function () {
+      btn.disabled = false;
       document.getElementById("room-modal-backdrop").hidden = true;
       unlockAppAndConnect(code, true);
     }).catch(function () {
+      btn.disabled = false;
       toast("⚠ ルーム作成に失敗した");
     });
   });
+  document.getElementById("room-create-password-input").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); document.getElementById("room-create-btn").click(); } // I11
+  });
   document.getElementById("room-join-btn").addEventListener("click", function () {
+    var btn = this;
+    if (btn.disabled) return; // I10: guard against double-click
     var input = document.getElementById("room-join-input");
     var code = input.value.trim().toUpperCase();
     if (!code) { input.focus(); return; }
+    btn.disabled = true;
     fetchRoomPassword(code).then(function (pw) {
+      btn.disabled = false;
       var required = pw || LEGACY_DEFAULT_PASSWORD;
       document.getElementById("room-modal-backdrop").hidden = true;
       showPasswordGate(code, required, function () { unlockAppAndConnect(code, false); });
     }).catch(function () {
+      btn.disabled = false;
       toast("⚠ ルーム情報の確認に失敗した");
     });
   });
@@ -1268,7 +1307,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
   var teamsPrefs = (function () {
     try { return JSON.parse(localStorage.getItem(TEAMS_PREFS_KEY)) || {}; } catch (e) { return {}; }
   })();
-  function saveTeamsPrefs() { localStorage.setItem(TEAMS_PREFS_KEY, JSON.stringify(teamsPrefs)); }
+  function saveTeamsPrefs() { try { localStorage.setItem(TEAMS_PREFS_KEY, JSON.stringify(teamsPrefs)); } catch (e) { /* storage full or unavailable */ } }
   var soundOn = teamsPrefs.sound !== false;
 
   var audioCtx = null;
@@ -1298,6 +1337,8 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
   var lastFetchFailToastAt = 0;
   var lastFetchWas429 = false;
   var teamsRefreshTimer = null;
+  var lastTeamsFetchAt = 0;                 // when the last BattleMetrics fetch was *started*
+  var MIN_TEAMS_FETCH_INTERVAL_MS = 30000;  // don't re-hit BattleMetrics more often than this (429 guard)
 
   function scheduleNextTeamsRefresh() {
     if (teamsRefreshTimer) clearTimeout(teamsRefreshTimer);
@@ -1841,20 +1882,31 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       selectionCanvasRect = { x: left * scaleX, y: top * scaleY, w: w * scaleX, h: h * scaleY };
     }
 
+    // I3: buildOcrSection() runs once per team on every renderTeamsList(), so document-level
+    // listeners registered here would accumulate on each re-render and never be freed. Instead we
+    // add the document listeners only while a drag is in progress and remove them on mouseup. The
+    // document (not canvas) scope during the drag is still needed so a drag that leaves the canvas
+    // keeps tracking, preserving the original selection behavior.
+    function onDocMouseMove(e) {
+      if (!isDragging) return;
+      var rect = canvas.getBoundingClientRect();
+      var cur = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      updateSelectionBox(dragStartDisplay, cur);
+    }
+    function onDocMouseUp() {
+      isDragging = false;
+      document.removeEventListener("mousemove", onDocMouseMove);
+      document.removeEventListener("mouseup", onDocMouseUp);
+    }
     canvas.addEventListener("mousedown", function (e) {
       var rect = canvas.getBoundingClientRect();
       dragStartDisplay = { x: e.clientX - rect.left, y: e.clientY - rect.top };
       isDragging = true;
       updateSelectionBox(dragStartDisplay, dragStartDisplay);
+      document.addEventListener("mousemove", onDocMouseMove);
+      document.addEventListener("mouseup", onDocMouseUp);
       e.preventDefault();
     });
-    document.addEventListener("mousemove", function (e) {
-      if (!isDragging) return;
-      var rect = canvas.getBoundingClientRect();
-      var cur = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-      updateSelectionBox(dragStartDisplay, cur);
-    });
-    document.addEventListener("mouseup", function () { isDragging = false; });
 
     function runOcr() {
       var rect = selectionCanvasRect;
@@ -2062,6 +2114,10 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
         teamId: teamCardEl ? teamCardEl.dataset.teamId : null,
         memberId: memberRowEl ? memberRowEl.dataset.memberId : null,
         field: active.dataset.field || null,
+        // I4: preserve the currently-typed (uncommitted) value. A remote onValue update rebuilds
+        // the whole list from saved state; without this the user's half-typed team/member/steam
+        // text would be reverted on every incoming sync.
+        value: (typeof active.value === "string") ? active.value : null,
         selStart: (typeof active.selectionStart === "number") ? active.selectionStart : null
       };
     }
@@ -2200,6 +2256,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
         var steamIdInput = document.createElement("input");
         steamIdInput.type = "text";
         steamIdInput.className = "steamid-input";
+        steamIdInput.dataset.field = "member-steam"; // I12: enables focus + in-progress-value restore on re-render
         steamIdInput.value = member.steamId || "";
         steamIdInput.placeholder = "Steam ID / URL（任意）";
         steamIdInput.setAttribute("aria-label", member.name + " のSteam ID");
@@ -2401,6 +2458,11 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       if (focusInfo.field) sel += ' input[data-field="' + focusInfo.field + '"]';
       var toRefocus = container.querySelector(sel);
       if (toRefocus) {
+        // I4: restore the uncommitted value before focusing so in-progress typing survives a
+        // remote-triggered re-render.
+        if (focusInfo.value != null && typeof toRefocus.value === "string" && toRefocus.value !== focusInfo.value) {
+          toRefocus.value = focusInfo.value;
+        }
         toRefocus.focus();
         if (focusInfo.selStart != null && typeof toRefocus.setSelectionRange === "function") {
           try { toRefocus.setSelectionRange(focusInfo.selStart, focusInfo.selStart); } catch (e) { /* ignore */ }
@@ -2458,12 +2520,22 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
   }
 
   function fetchOnlinePlayerPage(url, entries, pageNum, maxPages) {
-    return fetch(url, { cache: "no-store" })
+    // Timeout guard (I5): without this, a request that hangs forever never resolves nor rejects,
+    // so refreshTeamStatuses()'s trailing .then(scheduleNextTeamsRefresh) never runs and polling
+    // dies permanently. AbortController + timeout guarantees the promise settles (rejects on abort),
+    // which flows through .catch into scheduleNextTeamsRefresh so the next poll is always queued.
+    var controller = ("AbortController" in window) ? new AbortController() : null;
+    var opts = { cache: "no-store" };
+    if (controller) opts.signal = controller.signal;
+    var timeoutId = controller ? setTimeout(function () { controller.abort(); }, 10000) : null;
+    function clearTimer() { if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; } }
+    return fetch(url, opts)
       .then(function (res) {
         if (!res.ok) { var err = new Error("bad status " + res.status); err.status = res.status; throw err; }
         return res.json();
       })
       .then(function (data) {
+        clearTimer();
         (data.data || []).forEach(function (p) {
           if (p && p.attributes && p.attributes.name) {
             entries.push({ name: p.attributes.name, id: bmPlayerId(p) });
@@ -2472,6 +2544,10 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
         var next = data.links && data.links.next;
         if (next && pageNum < maxPages) return fetchOnlinePlayerPage(next, entries, pageNum + 1, maxPages);
         return entries;
+      })
+      .catch(function (err) {
+        clearTimer();
+        throw err;
       });
   }
 
@@ -2588,6 +2664,15 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       scheduleNextTeamsRefresh();
       return;
     }
+    // Throttle guard (I1): a redundant call that arrives within MIN_TEAMS_FETCH_INTERVAL_MS of the
+    // previous fetch is dropped -- we do NOT hit BattleMetrics again, but we DO keep the polling
+    // timer alive so monitoring continues. The 45s scheduled poll is always > 30s so it is never
+    // throttled; only rapid extra triggers (manual button spam, imports, etc.) are.
+    if (lastTeamsFetchAt && (Date.now() - lastTeamsFetchAt) < MIN_TEAMS_FETCH_INTERVAL_MS) {
+      scheduleNextTeamsRefresh();
+      return;
+    }
+    lastTeamsFetchAt = Date.now();
     fetchOnlinePlayerPage(bmPlayersApiUrl(), [], 1, 8)
       .then(function (entries) {
         var lowerNames = entries.map(function (e) { return e.name.trim().toLowerCase(); });
@@ -2790,7 +2875,13 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     try { payload = decodeSharePayload(encoded); } catch (e) { payload = null; }
     if (payload && Array.isArray(payload.teams)) {
       var ok = confirm("共有されたリストを読み込みますか？（現在のチームに追加されます）\n含まれるチーム数: " + payload.teams.length);
-      if (ok) mergeSharedPayload(payload);
+      if (ok) {
+        mergeSharedPayload(payload);
+        // I8: this runs before any saved room reconnects. connectToRoom()'s first snapshot calls
+        // applyRemoteTeams(), which would overwrite these freshly-imported local teams. Stash the
+        // payload so that first snapshot re-merges (and syncs) it instead of dropping it.
+        pendingImportPayload = payload;
+      }
     }
     history.replaceState(null, "", location.pathname + location.search);
   }
