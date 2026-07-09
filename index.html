@@ -907,6 +907,24 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     }
   } catch (e) { /* ignore malformed saved value */ }
 
+  // 監視中のBattleMetricsサーバー → rustoria.coのサーバースラッグ（ファーム数リンク用の逆引き。
+  // ranking.htmlのBM_SERVER_ID_BY_RUSTORIAの逆）。未登録サーバーはrustoria側で手動選択に案内する。
+  var RUSTORIA_SERVER_BY_BM = { "6324892": "vanilla_main_us" };
+  // 味方メンバーの「🌾 ファーム数を見る」＝rustoria.coの該当サーバーのリーダーボードを新タブで開く
+  // （社長はログイン済みなので味方の数字が見える）。rustoriaがAPIをログイン必須化したためツール内での
+  // 自動取得はせず、公式ページへ飛ばす方式にする（規約・BANリスクなし）。
+  function openRustoriaFarm(name) {
+    var slug = RUSTORIA_SERVER_BY_BM[String(BM_SERVER_ID)];
+    var url = "https://rustoria.co/leaderboards";
+    if (slug) {
+      url += "?server=" + encodeURIComponent(slug);
+      if (name && name.trim()) url += "&username=" + encodeURIComponent(name.trim());
+    } else {
+      toast("rustoria.coでサーバーを選んで「" + (name || "") + "」を検索してほしい（この監視サーバーはrustoria未マッピング）");
+    }
+    window.open(url, "_blank", "noopener");
+  }
+
   function bmPlayersApiUrl() {
     return "https://api.battlemetrics.com/players?filter%5Bservers%5D=" + BM_SERVER_ID + "&filter%5Bonline%5D=true&page%5Bsize%5D=100";
   }
@@ -1338,13 +1356,17 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
   var lastFetchWas429 = false;
   var teamsRefreshTimer = null;
   var lastTeamsFetchAt = 0;                 // when the last BattleMetrics fetch was *started*
-  var MIN_TEAMS_FETCH_INTERVAL_MS = 30000;  // don't re-hit BattleMetrics more often than this (429 guard)
+  var MIN_TEAMS_FETCH_INTERVAL_MS = 5000;    // 非スケジュールの重複トリガー（追加・一括等）を間引く最小間隔
+  // 適応型ポーリング：基本6秒まで攻めてIN/OFFを素早く反映。429（BMのレート制限）を食らったら倍々で
+  // バックオフし、成功が続けば徐々に基本値へ戻す＝ブロックされない範囲で"限界まで速く"自己調整する。
+  // 1回のポーリングは通常1リクエスト（オンライン<100人なら1ページ）なので6秒でもBM負荷は軽い。
+  var TEAMS_POLL_MIN_MS = 6000;
+  var TEAMS_POLL_MAX_MS = 90000;
+  var teamsPollMs = TEAMS_POLL_MIN_MS;
 
   function scheduleNextTeamsRefresh() {
     if (teamsRefreshTimer) clearTimeout(teamsRefreshTimer);
-    var delay = lastFetchWas429 ? 75000 : 45000; // one-shot +30s after a 429, then back to normal
-    lastFetchWas429 = false;
-    teamsRefreshTimer = setTimeout(refreshTeamStatuses, delay);
+    teamsRefreshTimer = setTimeout(refreshTeamStatuses, teamsPollMs);
   }
 
   function updateTeamsLastChecked() {
@@ -2308,6 +2330,17 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
         trendBtn.setAttribute("aria-label", member.name + " のログイン傾向を見る");
         trendBtn.addEventListener("click", function () { openTrendModal(member, team); });
 
+        // 味方チームのメンバーだけ、rustoria.coでファーム数を見るジャンプボタンを出す
+        var farmBtn = null;
+        if (team.type === "friend") {
+          farmBtn = document.createElement("button");
+          farmBtn.type = "button";
+          farmBtn.className = "trend-btn";
+          farmBtn.textContent = "🌾 ファーム数を見る";
+          farmBtn.title = "rustoria.coでこの人のファーム数を見る（新しいタブで開く）";
+          farmBtn.addEventListener("click", function () { openRustoriaFarm(member.name); });
+        }
+
         var linkBtn = null;
         var linkWidget = null;
         if (!member.bmId) {
@@ -2374,6 +2407,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
         row.appendChild(pill);
         row.appendChild(lastSeenEl);
         row.appendChild(trendBtn);
+        if (farmBtn) row.appendChild(farmBtn);
         if (linkBtn) row.appendChild(linkBtn);
         if (unlinkBtn) row.appendChild(unlinkBtn);
         row.appendChild(delMemberBtn);
@@ -2487,7 +2521,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
   }
   document.getElementById("team-add-btn").addEventListener("click", addTeam);
   document.getElementById("team-add-input").addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); addTeam(); } });
-  document.getElementById("teams-refresh-btn").addEventListener("click", function () { refreshTeamStatuses(); });
+  document.getElementById("teams-refresh-btn").addEventListener("click", function () { refreshTeamStatuses(true); });
 
   var beepToggleBtn = document.getElementById("beep-toggle");
   function applyBeepLabel() {
@@ -2654,7 +2688,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     return filtered;
   }
 
-  function refreshTeamStatuses() {
+  function refreshTeamStatuses(force) {
     var totalMembers = teamsState.teams.reduce(function (sum, t) { return sum + t.members.length; }, 0);
     if (totalMembers === 0) {
       teamsLastChecked = Date.now();
@@ -2666,9 +2700,10 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     }
     // Throttle guard (I1): a redundant call that arrives within MIN_TEAMS_FETCH_INTERVAL_MS of the
     // previous fetch is dropped -- we do NOT hit BattleMetrics again, but we DO keep the polling
-    // timer alive so monitoring continues. The 45s scheduled poll is always > 30s so it is never
-    // throttled; only rapid extra triggers (manual button spam, imports, etc.) are.
-    if (lastTeamsFetchAt && (Date.now() - lastTeamsFetchAt) < MIN_TEAMS_FETCH_INTERVAL_MS) {
+    // timer alive so monitoring continues. The 6s scheduled poll is always > 5s so scheduled polls
+    // are never throttled; only rapid extra triggers (imports, multiple adds, etc.) are. force=true
+    // （手動「🔄 今すぐ確認」ボタン）はこのガードを飛ばして即時に取りに行く。
+    if (!force && lastTeamsFetchAt && (Date.now() - lastTeamsFetchAt) < MIN_TEAMS_FETCH_INTERVAL_MS) {
       scheduleNextTeamsRefresh();
       return;
     }
@@ -2749,9 +2784,11 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
           );
         });
         lastFetchWas429 = false;
+        teamsPollMs = Math.max(TEAMS_POLL_MIN_MS, Math.round(teamsPollMs * 0.6)); // 成功が続けば基本値へ戻す
       })
       .catch(function (err) {
         lastFetchWas429 = !!(err && err.status === 429);
+        if (lastFetchWas429) teamsPollMs = Math.min(TEAMS_POLL_MAX_MS, teamsPollMs * 2); // 429ならバックオフ
         if (Date.now() - lastFetchFailToastAt > 120000) {
           toast("⚠ 敵チーム監視：オンライン名簿の取得に失敗した（前回のステータスを保持）");
           lastFetchFailToastAt = Date.now();

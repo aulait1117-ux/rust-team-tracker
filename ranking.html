@@ -484,10 +484,11 @@
     </div>
 
     <div class="paste-bar">
+      <button class="btn-ghost" id="rustoria-view-btn" type="button" title="今見ているサーバーのrustoria.coリーダーボードを新しいタブで開く（ログイン済みなら自分のファーム数が見える）">🔗 ファーム数を見る（rustoria.co）</button>
       <button class="btn-ghost" id="paste-toggle-btn" type="button">📋 rustoria.coの表示をコピペして自動入力</button>
     </div>
     <div class="paste-box" id="paste-box" hidden>
-      <p>rustoria.coでメンバーのページを開き、木・石・金属鉱石・硫黄・上金・皮・脂肪・骨の表示部分をドラッグしてコピー(Ctrl+C)し、下に貼り付けてほしい。数値だけ自動で読み取って上のフォームに入れる（資源のみ対応。キル・デスも自動で取得したい場合は🌾自動取得ボタンを使ってほしい。プレイ時間はrustoria.co側にデータが無いので対象外）。</p>
+      <p><b>使い方：</b>「🔗 ファーム数を見る」でこのサーバーのrustoria.coページを開く（ログイン済みなら自分の数字が見える）→ 木・石・金属鉱石・硫黄・上金・皮・脂肪・骨の表示部分をドラッグしてコピー(Ctrl+C) → 下に貼り付け。数値だけ自動で読み取って上のフォームに入れる（資源8種に対応）。キル・デスは手入力、プレイ時間は「⏱ 自動取得」でBattleMetricsから取得可。<br>※rustoria.coが成績APIを<b>ログイン必須</b>に変更したため、🌾のワンクリック自動取得は現在使えません（この「見る→コピペ」で代替してほしい）。</p>
       <textarea id="paste-textarea" rows="4" placeholder="ここに貼り付け…"></textarea>
       <button class="btn-ghost" id="paste-parse-btn" type="button">🔍 解析してフォームに入力</button>
     </div>
@@ -1424,6 +1425,14 @@ import { getDatabase, ref, child, set, get, onValue, push, remove } from "https:
     };
   }
 
+  // 「🔗 ファーム数を見る」＝今見ているサーバーのrustoria.coリーダーボードを新タブで開く。
+  // rustoriaがAPIをログイン必須化したため自動取得は不可→社長はここで自分の数字を見てコピペする。
+  document.getElementById("rustoria-view-btn").addEventListener("click", function () {
+    if (!selectedServer) { toast("⚠ 先にサーバーを選んでほしい"); return; }
+    var url = "https://rustoria.co/leaderboards?server=" + encodeURIComponent(selectedServer);
+    window.open(url, "_blank", "noopener");
+  });
+
   document.getElementById("paste-toggle-btn").addEventListener("click", function () {
     var box = document.getElementById("paste-box");
     box.hidden = !box.hidden;
@@ -1696,7 +1705,7 @@ import { getDatabase, ref, child, set, get, onValue, push, remove } from "https:
       if (err && err.name === "AbortError") {
         toast("⚠ rustoria.coの応答がなくタイムアウトした（時間をおいて再試行してほしい）");
       } else {
-        toast("⚠ rustoria.coへの問い合わせに失敗した");
+        toast("⚠ rustoria.coがログイン必須に変わり、ワンクリック自動取得は不可。「🔗 ファーム数を見る」で開いてコピペしてほしい");
       }
     }).finally(function () {
       btn.disabled = false;
