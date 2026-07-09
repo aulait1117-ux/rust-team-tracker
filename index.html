@@ -465,7 +465,11 @@
     97.5% { transform: translate(3px,-1px); text-shadow: -3px 0 rgba(224,112,90,.7), 3px 0 rgba(111,168,201,.7); }
     98.5% { transform: translate(-1px,0); text-shadow: 2px 0 rgba(224,112,90,.6), -2px 0 rgba(111,168,201,.6); }
   }
-  @media (prefers-reduced-motion: reduce) { .brand-title { animation: none; } .team-card.flash { animation: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .page-head h1.brand-title { animation: none; }
+    .page-head h1.brand-title::after { animation: none; opacity: 0.28; }
+    .team-card.flash { animation: none; }
+  }
   .team-card-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
   .type-toggle {
     flex: none; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.03em;
@@ -1822,9 +1826,11 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     }
   }
 
+  // 「敵 N 人 IN中」バー・タブタイトル用。味方は対象外＝敵チームのオンライン人数だけを数える。
   function computeTotalOnline() {
     var total = 0;
     teamsState.teams.forEach(function (team) {
+      if (team.type === "friend") return;
       team.members.forEach(function (member) { if (member.online === true) total++; });
     });
     return total;
@@ -3037,16 +3043,22 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       return r;
     }
     function updateState() {
-      var base = farmLogBaseExp({ resources: collectResources() });
-      expHint.textContent = "獲得EXP：+" + fmtInt(Math.round(base));
-      saveBtn.disabled = !pendingDataUrl;
+      var res = collectResources();
+      var hasAny = Object.keys(res).length > 0;
+      var base = farmLogBaseExp({ resources: res });
+      expHint.textContent = hasAny
+        ? ("獲得EXP：+" + fmtInt(Math.round(base)))
+        : "スクショを貼ると数値が自動で入る（全部0のままだと記録できない）";
+      saveBtn.disabled = !pendingDataUrl || !hasAny;
     }
 
     var saveBtn = document.createElement("button");
     saveBtn.type = "button"; saveBtn.className = "btn-primary"; saveBtn.textContent = "このスクショで記録する";
     saveBtn.addEventListener("click", function () {
       if (!pendingDataUrl) { toast("⚠ スクショを貼ってから記録して"); return; }
-      recordFarm(member, collectResources(), "", pendingDataUrl);
+      var res = collectResources();
+      if (!Object.keys(res).length) { toast("⚠ 数値が読み取れていない（全部0）。別タブや鮮明なスクショで試して"); return; }
+      recordFarm(member, res, "", pendingDataUrl);
       backdrop.hidden = true;
       renderTeamsList();
       if (!document.getElementById("trend-modal-backdrop").hidden) openTrendModal(member, team);
@@ -3059,29 +3071,6 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     body.appendChild(saveBtn);
     updateState();
     backdrop.hidden = false;
-  }
-
-  // 所持称号：Lv1〜現在Lvで解放済みの称号を一覧（レアリティ色つき・現在の称号を強調）。
-  function buildOwnedTitlesSection(level) {
-    var wrap = document.createElement("div");
-    wrap.className = "owned-titles";
-    var maxShown = Math.min(level, LEVEL_TITLES.length);
-    var t = document.createElement("div"); t.className = "st-section-title";
-    t.textContent = "所持称号　" + maxShown + " / " + LEVEL_TITLES.length;
-    wrap.appendChild(t);
-    var chips = document.createElement("div"); chips.className = "title-chips";
-    for (var lv = 1; lv <= maxShown; lv++) {
-      var rc = rarityForLevel(lv);
-      var chip = document.createElement("span");
-      chip.className = "title-chip" + (lv === level ? " current" : "");
-      chip.style.borderColor = rc.color;
-      chip.style.color = rc.color;
-      chip.textContent = "Lv." + lv + " " + LEVEL_TITLES[lv - 1];
-      chip.title = rc.label;
-      chips.appendChild(chip);
-    }
-    wrap.appendChild(chips);
-    return wrap;
   }
 
   // 獲得称号（ファーム等の実績）＝レベル称号とは別軸。獲得済みの称号だけをレアリティ順（レアが上）に並べる。
@@ -3416,16 +3405,20 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
         var nm = document.createElement("span");
         nm.className = "fm-name fm-name-link" + (member.online === true ? " is-online" : member.online === false ? " is-offline" : "");
         nm.textContent = member.name;
-        nm.title = member.steamId ? "クリックでSteamプロフィールを開く" : "クリックでSteam ID / URLを設定";
+        nm.title = member.steamId ? "クリックでSteamプロフィールを開く" : "クリックでSteam ID / URLを設定して開く";
         nm.addEventListener("click", function () {
-          if (member.steamId) { var u = steamProfileUrl(member.steamId); if (u) window.open(u, "_blank", "noopener"); return; }
-          var input = window.prompt(member.name + " のSteamプロフィールURL、またはSteam ID（17桁前後）を貼ってください。\n設定すると、以降は名前クリックでプロフィールを開けます。\n例: https://steamcommunity.com/profiles/7656119…");
+          var url = member.steamId ? steamProfileUrl(member.steamId) : null;
+          if (url) { window.open(url, "_blank", "noopener"); return; }
+          // 未設定（または無効な値）：URL/IDを1回貼ってもらい、設定して“その場で開く”
+          var input = window.prompt(member.name + " のSteamプロフィールURL、またはSteam ID（17桁前後の数字）を貼ってください。\n一度設定すれば、以降は名前クリックですぐ開きます。\n例: https://steamcommunity.com/profiles/7656119…");
           if (!input) return;
           var p = parseSteamInput(input);
           var sid = p ? p.steamId : String(input).trim();
-          if (!sid) { toast("⚠ Steam ID を認識できなかった"); return; }
+          var newUrl = steamProfileUrl(sid);
+          if (!newUrl) { toast("⚠ Steam ID / URL を認識できなかった"); return; }
           member.steamId = sid; saveTeamsState(); renderTeamsList();
-          toast("🔗 " + member.name + " にSteamを設定した（名前クリックで開ける）");
+          window.open(newUrl, "_blank", "noopener");
+          toast("🔗 " + member.name + " のSteamを設定して開いた");
         });
         // 名前（ニックネーム）変更ボタン
         var renameBtn = document.createElement("button");
