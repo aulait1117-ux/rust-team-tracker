@@ -2700,6 +2700,14 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     { id: "bullets_hit",    name: "命中弾",         exp: 0.2,  grp: "PVP" },
     { id: "deaths",         name: "死亡(ネタ)",     exp: 0,    grp: "PVP" },
     { id: "suicides",       name: "自殺(ネタ)",     exp: 0,    grp: "PVP" },
+    // --- PVP+（rustoriaのPVP+タブ。競技系キル。HELI KILLSは既存heli_killsに統合。2026-07-10）---
+    { id: "competitive_kills", name: "コンペティティブキル", exp: 30, grp: "PVP+" },
+    { id: "oilrig_kills",      name: "オイルリグキル",       exp: 40, grp: "PVP+" },
+    { id: "diving_kills",      name: "ダイビングキル",       exp: 30, grp: "PVP+" },
+    { id: "sub_kills",         name: "潜水艦キル",           exp: 30, grp: "PVP+" },
+    { id: "longest_kill",      name: "最長キル距離(m)",      exp: 0,  grp: "PVP+" }, // 距離の記録。累積最大値方式に合致（EXPは付けない）
+    { id: "self_wounds",       name: "自傷(ネタ)",           exp: 0,  grp: "PVP+" },
+    { id: "oilrig_deaths",     name: "オイルリグ死亡(ネタ)", exp: 0,  grp: "PVP+" },
     // --- PVE／モニュメント ---
     { id: "scientist_kills",name: "サイエンティスト", exp: 15, grp: "モニュメント" },
     { id: "heavy_scientist",name: "ヘビー科学者",   exp: 25,   grp: "モニュメント" },
@@ -2712,9 +2720,11 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     // --- 建築 ---
     { id: "blocks_placed",  name: "設置ブロック",   exp: 1,    grp: "建築" },
     { id: "blocks_upgraded",name: "強化ブロック",   exp: 1,    grp: "建築" },
-    // --- ルート ---
+    // --- ルート（rustoriaのLOOTタブ）---
     { id: "crates_looted",  name: "クレート",       exp: 5,    grp: "ルート" },
-    { id: "barrels_broken", name: "バレル",         exp: 2,    grp: "ルート" }
+    { id: "barrels_broken", name: "バレル",         exp: 2,    grp: "ルート" },
+    { id: "crates_freed",   name: "解放クレート",   exp: 5,    grp: "ルート" }, // LOOT CRATES FREED（2026-07-10）
+    { id: "fish_gutted",    name: "魚さばき",       exp: 1,    grp: "ルート" }  // FISH GUTTED（2026-07-10）
   ];
   // rustoriaの各タブ（成績画面）の項目並び順。ラベルOCRが化けても「数字だけの行」をこの順で自動割り当てできる。2026-07-10
   // ※rustoriaの各タブは上から下・左から右にこの順で並ぶ前提。並びが違ったらタブ選択で入れ直す運用。
@@ -2722,10 +2732,13 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     { key: "リソース", ids: ["sulfur_ore", "metal_ore", "hq_metal_ore", "stones", "wood", "leather", "animal_fat", "bone"] },
     { key: "農業",     ids: ["cloth", "yellow_berry", "red_berry", "blue_berry", "green_berry", "white_berry", "mushroom", "pumpkin", "corn", "potato", "wheat", "flowers", "eggs"] },
     { key: "PVP",      ids: ["kills", "headshots", "bullets_hit", "deaths", "suicides"] },
+    // PVP+タブの画面並び順（左→右・上→下）：COMPETITIVE KILLS / LONGEST KILL / SELF-WOUNDS / OILRIG KILLS / OILRIG DEATHS / HELI KILLS / DIVING KILLS / SUB KILLS
+    { key: "PVP+",     ids: ["competitive_kills", "longest_kill", "self_wounds", "oilrig_kills", "oilrig_deaths", "heli_kills", "diving_kills", "sub_kills"] },
     { key: "モニュメント", ids: ["scientist_kills", "heavy_scientist", "bradley_kills", "heli_kills"] },
     { key: "レイド",   ids: ["rockets", "c4_thrown", "satchels"] },
     { key: "建築",     ids: ["blocks_placed", "blocks_upgraded"] },
-    { key: "ルート",   ids: ["crates_looted", "barrels_broken"] },
+    // LOOTタブの画面並び順：LOOT CRATES LOOTED / LOOT BARRELS BROKEN / LOOT CRATES FREED / FISH GUTTED
+    { key: "ルート",   ids: ["crates_looted", "barrels_broken", "crates_freed", "fish_gutted"] },
     { key: "その他",   ids: ["scrap", "lowgrade"] }
   ];
   function cumulativeExpForLevel(L) { return L <= 1 ? 0 : Math.round(LEVEL_EXP_K * Math.pow(L - 1, LEVEL_EXP_P)); }
@@ -2971,9 +2984,19 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     // 建築
     { id: "blocks_placed",  re: /BLOCKS\s*PLACED|設置ブロック|設置したブロック/i },
     { id: "blocks_upgraded",re: /BLOCKS\s*UPGRADED|強化ブロック|アップグレードしたブロック/i },
-    // ルート
+    // ルート（LOOTタブ）。"CRATES FREED" を "CRATES LOOTED" と取り違えないよう別語で限定。
+    { id: "crates_freed",   re: /(?:LOOT\s*)?CRATES?\s*FREED|解放.*クレート|クレート.*解放/i },
     { id: "crates_looted",  re: /(?:LOOT\s*)?CRATES?\s*LOOTED|クレート|木箱/i },
     { id: "barrels_broken", re: /(?:LOOT\s*)?BARRELS?\s*BROKEN|バレル|樽/i },
+    { id: "fish_gutted",    re: /FISH\s*GUTTED|魚を?さばい|魚を?捌|魚さばき/i },
+    // PVP+（rustoriaのPVP+タブ。"…KILLS"／"…DEATHS" を含むので汎用KILLS/DEATHSより先に処理する）
+    { id: "competitive_kills", re: /COMPETITIVE\s*KILLS|コンペティティブ?\s*キル|競技キル/i },
+    { id: "oilrig_kills",      re: /OIL\s*RIG\s*KILLS|オイルリグ\s*キル/i },
+    { id: "oilrig_deaths",     re: /OIL\s*RIG\s*DEATHS|オイルリグ\s*死亡/i },
+    { id: "diving_kills",      re: /DIVING\s*KILLS|ダイビング\s*キル|潜水\s*キル/i },
+    { id: "sub_kills",         re: /SUB(?:MARINE)?\s*KILLS|潜水艦\s*キル/i },
+    { id: "longest_kill",      re: /LONGEST\s*KILL|最長\s*キル/i },
+    { id: "self_wounds",       re: /SELF[-\s]*WOUNDS?|自傷/i },
     // PVP（汎用KILLS／「キル」は最後に処理）
     { id: "headshots",      re: /HEADSHOTS?|ヘッドショット/i },
     { id: "bullets_hit",    re: /BULLETS\s*HIT|命中弾/i },
@@ -3305,7 +3328,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
 
     var resLbl = document.createElement("label"); resLbl.className = "farm-field-lbl"; resLbl.textContent = "項目ごとの数値（スクショの数字を入力・空欄は0）。どのタブのスクショでもOK、写っている項目だけ埋めればいい。";
     var grid = document.createElement("div"); grid.className = "farm-res-wrap";
-    var STAT_GROUP_ORDER = ["資源・農業", "PVP", "モニュメント", "レイド", "建築", "ルート"];
+    var STAT_GROUP_ORDER = ["資源・農業", "PVP", "PVP+", "モニュメント", "レイド", "建築", "ルート"];
     var byGroup = {};
     RESOURCE_TYPES.forEach(function (rt) { var g = rt.grp || "資源・農業"; (byGroup[g] = byGroup[g] || []).push(rt); });
     STAT_GROUP_ORDER.forEach(function (g) {
