@@ -3362,6 +3362,15 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       grid.appendChild(sub);
     });
 
+    // 記録モーダルを開いた時点の累積（＝全記録の最大値）を初期表示する。rustoria成績は累積値なので、
+    // 前回までの到達値を見せた上で「増えたぶんだけ記録」できるようにする。タブごとに別々にスクショを貼っても、
+    // 貼らなかった項目は前回値が残る＝合算されているのが目に見える（社長「記録してまた記録しようとしたら前回のがでてない」2026-07-10）。
+    var openingTotals = memberResourceTotalsMap(member);
+    RESOURCE_TYPES.forEach(function (rt) {
+      var v = Number(openingTotals[rt.id]) || 0;
+      if (v > 0 && resInputs[rt.id]) resInputs[rt.id].value = v;
+    });
+
     var expHint = document.createElement("div"); expHint.className = "farm-exp-hint";
 
     function collectResources() {
@@ -3374,12 +3383,17 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     }
     function updateState() {
       var res = collectResources();
-      var hasAny = Object.keys(res).length > 0;
-      var base = farmLogBaseExp({ resources: res });
-      expHint.textContent = hasAny
-        ? ("獲得EXP：+" + fmtInt(Math.round(base)))
-        : "スクショを貼ると数値が自動で入る（全部0のままだと記録できない）";
-      saveBtn.disabled = !pendingDataUrl || !hasAny;
+      // 現在の累積(openingTotals)より増えた項目だけをEXPとして数える＝実際に記録される増分。
+      // 累積値どうしの比較なので、同じ数値を貼り直しても増分0＝記録されない（ずる防止と一致）。
+      var incExp = 0, hasIncrease = false;
+      RESOURCE_TYPES.forEach(function (rt) {
+        var nv = Number(res[rt.id]) || 0, ov = Number(openingTotals[rt.id]) || 0;
+        if (nv > ov) { incExp += (nv - ov) * rt.exp; hasIncrease = true; }
+      });
+      expHint.textContent = hasIncrease
+        ? ("獲得EXP：+" + fmtInt(Math.round(incExp)) + "（前回からの増加ぶん）")
+        : "スクショを貼って、前回より増えた数値があれば記録できる（同じ数値では増えない＝ずる防止）";
+      saveBtn.disabled = !pendingDataUrl || !hasIncrease;
     }
 
     var saveBtn = document.createElement("button");
