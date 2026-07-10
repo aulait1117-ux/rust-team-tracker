@@ -2896,10 +2896,16 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     eternal: 5000000, godtier: 10000000, beyond: 25000000
   };
   function rarityExp(key) { return RARITY_EXP[key] || 0; }
-  // 獲得済み実績称号ぶんのEXP合計（獲得した各tierのレアリティEXPを積み上げ）。
+  // 全メンバー共通の指標（サイト稼働時間・敵チーム登録数・拠点スクショ数）は「その人個人が稼いだ実績」ではなく
+  // 閲覧ブラウザ／ルーム全体の値なので、個人のレベルEXPには加算しない。特に __site_time__ は siteOpenHours()＝
+  // サイトを開いているだけで時間経過とともに増えるため、これを入れるとオフラインのメンバーまで一律にレベルが上がる
+  // （社長「オフラインなのにレベルが上がってる」の真因。2026-07-10修正）。称号バッジ表示(memberAchievements)は従来どおり残す。
+  var NON_PERSONAL_ACH_STATS = { "__site_time__": 1, "__enemy_teams__": 1, "__base_photos__": 1 };
+  // 獲得済み実績称号ぶんのEXP合計（獲得した各tierのレアリティEXPを積み上げ）。共有指標はレベルEXP対象外。
   function achievementExp(member) {
     var sum = 0;
     ACHIEVEMENTS.forEach(function (cat) {
+      if (NON_PERSONAL_ACH_STATS[cat.stat]) return; // 共有指標（サイト稼働・敵登録・拠点スクショ）は個人レベルEXPに入れない
       var total = achievementStatValue(member, cat);
       cat.tiers.forEach(function (ti) { if (total >= ti.th) sum += rarityExp(ti.rk); });
     });
