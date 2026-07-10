@@ -2883,51 +2883,53 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     return top.join("・") + (arr.length > 3 ? (" 他" + (arr.length - 3) + "種") : "");
   }
 
-  // rustoria RESOURCES画面のOCR用ラベル。HQ METAL ORE は METAL ORE より先に処理する（部分一致の取り違え防止）。
+  // rustoria RESOURCES画面のOCR用ラベル。英語表示・日本語表示の両方に対応する（社長のrustoriaは日本語表示。2026-07-10 対応）。
+  // HQ METAL ORE / 高品質金属鉱石 は METAL ORE / 金属鉱石 より先に処理する（部分一致の取り違え防止）。
+  // 日本語ラベルは rustoria の実表記（例「硫黄鉱石を収穫」「金属鉱石の採掘」「石が収穫された」「伐採された木材」）に合わせる。
   var OCR_LABELS = [
-    { id: "hq_metal_ore", re: /HQ\s*METAL\s*ORE/i },
-    { id: "metal_ore",    re: /METAL\s*ORE/i },
-    { id: "sulfur_ore",   re: /SUL[FT]?UR\s*ORE/i },
-    { id: "stones",       re: /STONES?\b/i },
-    { id: "wood",         re: /WOOD\s*HARVESTED/i },
-    { id: "cloth",        re: /CLOTH/i },
-    { id: "leather",      re: /LEATHER/i },
-    { id: "animal_fat",   re: /ANIMAL\s*FAT/i },
-    { id: "bone",         re: /BONE\s*FRAG/i },
-    { id: "yellow_berry", re: /YELLOW\s*BERRY/i },
-    { id: "red_berry",    re: /RED\s*BERRY/i },
-    { id: "blue_berry",   re: /BLUE\s*BERRY/i },
-    { id: "green_berry",  re: /GREEN\s*BERRY/i },
-    { id: "white_berry",  re: /WHITE\s*BERRY/i },
-    { id: "mushroom",     re: /MUSHROOM/i },
-    { id: "pumpkin",      re: /PUMPKIN/i },
-    { id: "corn",         re: /CORN/i },
-    { id: "potato",       re: /POTATO/i },
-    { id: "wheat",        re: /WHEAT/i },
-    { id: "flowers",      re: /FLOWERS?/i },
-    { id: "eggs",         re: /EGGS?/i },
-    // PVE／モニュメント（"HEAVY SCIENTIST" を "SCIENTIST" より先に）
-    { id: "heavy_scientist",re: /HEAVY\s*SCIENTIST\s*KILLS/i },
-    { id: "scientist_kills",re: /SCIENTIST\s*KILLS/i },
-    { id: "bradley_kills",  re: /BRADLEY\s*KILLS/i },
-    { id: "heli_kills",     re: /(?:ATTACK\s*)?HELI\s*KILLS/i },
-    // レイド（"HV ROCKETS" を先に食わせて、通常ロケットと取り違えないようにする。_で始まるidは出力から無視）
-    { id: "_hv_rockets",    re: /HV\s*ROCKETS\s*LAUNCHED/i },
-    { id: "rockets",        re: /ROCKETS\s*LAUNCHED/i },
-    { id: "c4_thrown",      re: /C4\s*THROWN/i },
-    { id: "satchels",       re: /SATCHELS?\s*THROWN/i },
+    { id: "hq_metal_ore", re: /HQ\s*METAL\s*ORE|高品質金属鉱石|HQ金属鉱石/i },
+    { id: "metal_ore",    re: /METAL\s*ORE|金属鉱石/i },
+    { id: "sulfur_ore",   re: /SUL[FT]?UR\s*ORE|硫黄鉱石/i },
+    { id: "stones",       re: /STONES?\b|石が収穫|採掘された石|収穫された石|石を収穫/i },
+    { id: "wood",         re: /WOOD\s*HARVESTED|木材|伐採/i },
+    { id: "cloth",        re: /CLOTH|布|ヘンプ/i },
+    { id: "leather",      re: /LEATHER|革|レザー/i },
+    { id: "animal_fat",   re: /ANIMAL\s*FAT|動物性?脂肪|動物の脂/i },
+    { id: "bone",         re: /BONE\s*FRAG|骨片|骨のかけら/i },
+    { id: "yellow_berry", re: /YELLOW\s*BERRY|黄色?ベリー/i },
+    { id: "red_berry",    re: /RED\s*BERRY|赤ベリー/i },
+    { id: "blue_berry",   re: /BLUE\s*BERRY|青ベリー/i },
+    { id: "green_berry",  re: /GREEN\s*BERRY|緑ベリー/i },
+    { id: "white_berry",  re: /WHITE\s*BERRY|白ベリー/i },
+    { id: "mushroom",     re: /MUSHROOM|きのこ|キノコ|茸/i },
+    { id: "pumpkin",      re: /PUMPKIN|かぼちゃ|カボチャ|南瓜/i },
+    { id: "corn",         re: /CORN|とうもろこし|トウモロコシ|玉蜀黍/i },
+    { id: "potato",       re: /POTATO|じゃがいも|ジャガイモ|馬鈴薯/i },
+    { id: "wheat",        re: /WHEAT|小麦/i },
+    { id: "flowers",      re: /FLOWERS?|花/i },
+    { id: "eggs",         re: /EGGS?|卵|たまご/i },
+    // PVE／モニュメント（"HEAVY SCIENTIST"／「ヘビー科学者」を "SCIENTIST"／「科学者」より先に）
+    { id: "heavy_scientist",re: /HEAVY\s*SCIENTIST\s*KILLS|ヘビー科学者|重装科学者/i },
+    { id: "scientist_kills",re: /SCIENTIST\s*KILLS|サイエンティスト|科学者/i },
+    { id: "bradley_kills",  re: /BRADLEY\s*KILLS|ブラッドリー/i },
+    { id: "heli_kills",     re: /(?:ATTACK\s*)?HELI\s*KILLS|ヘリ(?:コプター)?撃破|ヘリ撃破/i },
+    // レイド（"HV ROCKETS"／「高速ロケット」を先に食わせて、通常ロケットと取り違えないようにする。_で始まるidは出力から無視）
+    { id: "_hv_rockets",    re: /HV\s*ROCKETS\s*LAUNCHED|HVロケット|高速ロケット/i },
+    { id: "rockets",        re: /ROCKETS\s*LAUNCHED|ロケット/i },
+    { id: "c4_thrown",      re: /C4\s*THROWN|C4/i },
+    { id: "satchels",       re: /SATCHELS?\s*THROWN|サッチェル/i },
     // 建築
-    { id: "blocks_placed",  re: /BLOCKS\s*PLACED/i },
-    { id: "blocks_upgraded",re: /BLOCKS\s*UPGRADED/i },
+    { id: "blocks_placed",  re: /BLOCKS\s*PLACED|設置ブロック|設置したブロック/i },
+    { id: "blocks_upgraded",re: /BLOCKS\s*UPGRADED|強化ブロック|アップグレードしたブロック/i },
     // ルート
-    { id: "crates_looted",  re: /(?:LOOT\s*)?CRATES?\s*LOOTED/i },
-    { id: "barrels_broken", re: /(?:LOOT\s*)?BARRELS?\s*BROKEN/i },
-    // PVP（汎用KILLSは最後に処理）
-    { id: "headshots",      re: /HEADSHOTS?/i },
-    { id: "bullets_hit",    re: /BULLETS\s*HIT/i },
-    { id: "suicides",       re: /SUICIDES?/i },
-    { id: "deaths",         re: /DEATHS/i },
-    { id: "kills",          re: /\bKILLS\b/i }
+    { id: "crates_looted",  re: /(?:LOOT\s*)?CRATES?\s*LOOTED|クレート|木箱/i },
+    { id: "barrels_broken", re: /(?:LOOT\s*)?BARRELS?\s*BROKEN|バレル|樽/i },
+    // PVP（汎用KILLS／「キル」は最後に処理）
+    { id: "headshots",      re: /HEADSHOTS?|ヘッドショット/i },
+    { id: "bullets_hit",    re: /BULLETS\s*HIT|命中弾/i },
+    { id: "suicides",       re: /SUICIDES?|自殺/i },
+    { id: "deaths",         re: /DEATHS|死亡/i },
+    { id: "kills",          re: /\bKILLS\b|キル/i }
   ];
   // OCRテキストを行ベースで解析。rustoriaは「ラベル行 → 数値行」または「ラベル 数値」（同一行）なので、
   // ①同じ行にラベル後の数字があればそれ ②無ければ直後1〜2行の「数字だけの行」を採用。
@@ -3109,7 +3111,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       var cv = region
         ? preprocessImageRegion(srcImg, region.sx, region.sy, region.sw, region.sh)
         : preprocessImageRegion(srcImg, 0, 0, srcImg.width, srcImg.height);
-      window.Tesseract.recognize(cv, "eng").then(function (res) {
+      window.Tesseract.recognize(cv, "eng+jpn").then(function (res) {
         var parsed = parseResourceOcr(res && res.data ? res.data.text : "");
         var n = 0;
         RESOURCE_TYPES.forEach(function (rt) {
