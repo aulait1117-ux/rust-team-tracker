@@ -298,7 +298,7 @@
   .ach-cat { font-size: 12px; color: var(--text-muted); }
   .ach-body { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .ach-earned-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .ach-chip { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--line); border-radius: 3px; padding: 3px 9px; font-weight: 700; }
+  .ach-chip { font-family: var(--font-mono); font-size: 12px; border: 1px solid var(--line); border-radius: 3px; padding: 3px 9px; font-weight: 700; color: var(--text); background: rgba(255,255,255,0.05); }
   .ach-none { font-size: 11px; color: var(--text-faint); }
   .ach-next { font-size: 10.5px; color: var(--text-faint); font-family: var(--font-mono); }
   .farm-rec-btn {
@@ -2942,28 +2942,55 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     for (var q = 0; q < OCR_LABELS.length; q++) { if (OCR_LABELS[q].re.test(line)) return OCR_LABELS[q]; }
     return null;
   }
+  // rustoriaのRESOURCES画面は「升目（カード）」レイアウトで、Tesseractは1行に複数ラベル→次行に複数数値、
+  // または1升ずつ「ラベル 数値」と読む。旧実装は①1行1ラベルしか拾えず②数値が複数並ぶ行を捨てていたため
+  // カード全体では0件になっていた（社長ライブで日本語・英語とも読めず）。v2＝1行内の「全ラベル・全数値」を
+  // 文字位置で拾い、出現順に並べて「各ラベル→その後ろにある未使用の数値」を貪欲割り当てする（両レイアウト対応）。
   function parseResourceOcr(text) {
-    var lines = String(text || "").replace(/\r/g, "\n").split(/\n+/).map(function (s) { return s.trim(); }).filter(Boolean);
-    var labelHits = [], nums = [];
-    for (var i = 0; i < lines.length; i++) {
-      var lb = labelForLine(lines[i]);
-      if (lb) {
-        var same = lines[i].replace(lb.re, " ").match(/\d[\d,]*/); // 同一行に「ラベル 数値」
-        labelHits.push({ id: lb.id, pos: i, same: same ? ocrToInt(same[0]) : null });
-      } else {
-        var only = lines[i].match(/^\D*(\d[\d,]*)\D*$/); // 数字だけの行
-        if (only) nums.push({ v: ocrToInt(only[1]), pos: i });
+    var rawLines = String(text || "").replace(/\r/g, "\n").split(/\n+/);
+    var seq = [];            // 全行を通した出現順トークン列：{type:'label',id} / {type:'num',v}
+    var order = 0;
+    for (var li = 0; li < rawLines.length; li++) {
+      var line = rawLines[li];
+      if (!line || !line.trim()) continue;
+      var masked = line.split("");   // ラベルとして消費した文字はnullで潰し、数値抽出時に除外する
+      var toks = [];
+      // 1) 1行内の全ラベルを most-specific（配列順）に走査。消費済み範囲と重なる一致は捨てる（金属鉱石⊂HQ金属鉱石の取り違え防止）
+      for (var q = 0; q < OCR_LABELS.length; q++) {
+        var re = new RegExp(OCR_LABELS[q].re.source, "gi");
+        var m;
+        while ((m = re.exec(line)) !== null) {
+          var s = m.index, e = m.index + m[0].length;
+          if (e === s) { re.lastIndex++; continue; }
+          var overlap = false;
+          for (var c = s; c < e; c++) { if (masked[c] === null) { overlap = true; break; } }
+          if (!overlap) {
+            toks.push({ type: "label", id: OCR_LABELS[q].id, pos: s });
+            for (var c2 = s; c2 < e; c2++) masked[c2] = null;
+          }
+          if (m.index === re.lastIndex) re.lastIndex++;
+        }
+      }
+      // 2) ラベル文字を除いた残りから数値を全部拾う（"C4"等ラベル内の数字は既に潰れている）
+      var maskedStr = masked.map(function (ch) { return ch === null ? " " : ch; }).join("");
+      var nre = /\d[\d,]*/g, nm;
+      while ((nm = nre.exec(maskedStr)) !== null) {
+        var v = ocrToInt(nm[0]);
+        if (v != null) toks.push({ type: "num", v: v, pos: nm.index });
+      }
+      // 3) この行のトークンを文字位置順にして全体列へ
+      toks.sort(function (a, b) { return a.pos - b.pos; });
+      for (var t = 0; t < toks.length; t++) { toks[t].order = order++; seq.push(toks[t]); }
+    }
+    // 4) 各ラベルに「そのラベルより後ろにある未使用の数値」を割り当て（同一idは最初の一致を採用）
+    var out = {}, usedNum = {};
+    for (var i = 0; i < seq.length; i++) {
+      if (seq[i].type !== "label" || out[seq[i].id] != null) continue;
+      for (var k = 0; k < seq.length; k++) {
+        if (seq[k].type !== "num" || usedNum[k] || seq[k].order <= seq[i].order) continue;
+        out[seq[i].id] = seq[k].v; usedNum[k] = true; break;
       }
     }
-    var out = {}, usedNum = {};
-    labelHits.forEach(function (h) {
-      if (out[h.id] != null) return;           // 同じラベルが複数出たら最初を採用
-      if (h.same != null) { out[h.id] = h.same; return; }
-      for (var k = 0; k < nums.length; k++) {  // 後ろにある未使用の数値を割り当て
-        if (usedNum[k] || nums[k].pos <= h.pos) continue;
-        out[h.id] = nums[k].v; usedNum[k] = true; break;
-      }
-    });
     return out;
   }
   function inTimeExp(member, teamType) {
@@ -3220,10 +3247,19 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     }
 
     var chips = document.createElement("div"); chips.className = "ach-earned-chips";
+    // hex → rgba（レア色を淡い塗り／ボーダーに使う。文字は明るい色で固定＝暗背景でも必ず読める。2026-07-10「称号見にくい」修正）
+    function hexA(hex, a) {
+      var h = String(hex || "").replace("#", "");
+      if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+      var n = parseInt(h, 16); if (isNaN(n)) return "rgba(200,200,200," + a + ")";
+      return "rgba(" + ((n >> 16) & 255) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + a + ")";
+    }
     earned.forEach(function (e) {
       var rc = rarityByKey(e.rk);
       var chip = document.createElement("span"); chip.className = "ach-chip";
-      chip.style.color = rc.color; chip.style.borderColor = rc.color;
+      chip.style.color = "#f4efe2";                         // 明るい文字（くすみレア色でも沈まない）
+      chip.style.borderColor = hexA(rc.color, 0.85);        // ボーダーはレア色
+      chip.style.background = hexA(rc.color, 0.20);          // レア色の淡い塗りでレア感を残す
       chip.textContent = e.n;
       chip.title = e.cat + "／" + rc.label + "（+" + fmtInt(rarityExp(e.rk)) + " EXP）";
       chips.appendChild(chip);
