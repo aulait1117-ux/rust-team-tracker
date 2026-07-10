@@ -297,9 +297,8 @@
   .ach-row:last-child { border-bottom: none; }
   .ach-cat { font-size: 12px; color: var(--text-muted); }
   .ach-body { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .ach-earned-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .ach-chip { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--text); padding: 1px 2px; }
-  .ach-earned-chips { column-gap: 14px; row-gap: 4px; }
+  .ach-earned-chips { display: flex; flex-wrap: wrap; column-gap: 18px; row-gap: 10px; margin-top: 6px; }
+  .ach-chip { font-family: var(--font-mono); font-size: 16px; font-weight: 700; color: var(--text); padding: 2px 3px; letter-spacing: .3px; line-height: 1.3; }
   .ach-none { font-size: 11px; color: var(--text-faint); }
   .ach-next { font-size: 10.5px; color: var(--text-faint); font-family: var(--font-mono); }
   .farm-rec-btn {
@@ -3437,6 +3436,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     });
 
     var t = document.createElement("div"); t.className = "st-section-title";
+    t.style.fontSize = "15px"; // 獲得称号セクションは見出しも少し大きく（社長「全体的にでかく・みえやすいように」2026-07-10）
     t.textContent = "獲得称号（ファーム実績）　" + earned.length + "個";
     wrap.appendChild(t);
 
@@ -3461,7 +3461,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     earned.forEach(function (e) {
       var rc = rarityByKey(e.rk);
       var chip = document.createElement("span"); chip.className = "ach-chip";
-      chip.style.color = lighten(rc.color, 0.45);           // レア色を明るめに（枠なしプレーン文字・暗背景でも読める）
+      chip.style.color = lighten(rc.color, 0.55);           // レア色を明るめに（枠なしプレーン文字・暗背景でも読める。2026-07-10 視認性↑で0.45→0.55）
       chip.textContent = e.n;
       chip.title = e.cat + "／" + rc.label + "（+" + fmtInt(rarityExp(e.rk)) + " EXP）";
       chips.appendChild(chip);
