@@ -2966,7 +2966,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
   }
   function inTimeExp(member, teamType) {
     var rate = teamType === "enemy" ? IN_EXP_PER_HOUR_ENEMY : IN_EXP_PER_HOUR;
-    return Math.floor(memberTotalOnlineMs(member) / 3600000) * rate;
+    return Math.round(memberTotalOnlineMs(member) / 3600000 * rate); // 分単位で連続加算（旧: Math.floorで1時間未満が全部0＝IN時間が違っても同レベルになる不具合。2026-07-10 社長報告で修正）
   }
   function farmExp(member) { return memberFarmLogs(member).reduce(function (a, l) { return a + farmLogExp(l); }, 0); }
   function memberExp(member, teamType) { return inTimeExp(member, teamType) + farmExp(member) + achievementExp(member); }

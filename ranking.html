@@ -418,7 +418,7 @@
     ACHIEVEMENTS.forEach(function (cat) { var total = statValue(m, cat); cat.tiers.forEach(function (ti) { if (total >= ti.th) sum += rarityExp(ti.rk); }); });
     return sum;
   }
-  function memberExp(m, type) { var rate = type === "enemy" ? IN_EXP_PER_HOUR_ENEMY : IN_EXP_PER_HOUR; return Math.floor(totalOnlineMs(m) / 3600000) * rate + farmExp(m) + achievementExp(m); }
+  function memberExp(m, type) { var rate = type === "enemy" ? IN_EXP_PER_HOUR_ENEMY : IN_EXP_PER_HOUR; return Math.round(totalOnlineMs(m) / 3600000 * rate) + farmExp(m) + achievementExp(m); } // プレイ時間EXPは分単位で連続加算（旧: Math.floorで1時間未満0の不具合。index.htmlと同値・2026-07-10修正）
   function levelInfo(m, type) {
     var exp = memberExp(m, type), level = 1;
     while (level < LEVEL_HARD_CAP && cumulativeExpForLevel(level + 1) <= exp) level++;
