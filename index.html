@@ -2196,7 +2196,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
   function preprocessImageRegion(img, sx, sy, sw, sh) {
     sx = Math.max(0, Math.round(sx)); sy = Math.max(0, Math.round(sy));
     sw = Math.max(1, Math.round(sw)); sh = Math.max(1, Math.round(sh));
-    var scale = Math.max(1, Math.min(2.4, 1700 / Math.max(1, sw)));
+    var scale = Math.max(1, Math.min(4, 2800 / Math.max(1, sw))); // 拡大率を引き上げ（旧1700/2.4）。全体スクショの小さい日本語ラベルが潰れて認識できない対策。2026-07-10
     var w = Math.max(1, Math.round(sw * scale)), h = Math.max(1, Math.round(sh * scale));
     var c = document.createElement("canvas"); c.width = w; c.height = h;
     var ctx = c.getContext("2d");
@@ -3067,7 +3067,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     var resInputs = {};
 
     var intro = document.createElement("div"); intro.className = "farm-file-note";
-    intro.textContent = "rustoriaの各タブ（RESOURCES／FARMING／PVP／RAIDING等）のスクショを貼ると、AIが数値を読み取って自動入力する（タブごとに順番に貼れば全項目が合算）。読み取れない時は数値を手で直してもOK。スクショの添付は必須＝記録には必ず証拠画像が残る。";
+    intro.textContent = "数値は手入力できない（嘘防止）。rustoriaの各タブ（RESOURCES／FARMING／PVP／RAIDING等）のスクショを貼ると、AIが数値を読み取って自動入力する。タブごとに順番に貼れば全項目が合算される。読み取れない時は対象の升目をドラッグで囲って「選択範囲だけ読み取る」を使うと確実。";
 
     var shotLbl = document.createElement("label"); shotLbl.className = "farm-field-lbl"; shotLbl.textContent = "スクショを貼る（AIが自動読み取り。ズレる時は画像上をドラッグして対象を囲み「選択範囲だけ読み取る」）";
     var fileInput = document.createElement("input");
@@ -3168,10 +3168,8 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
         var nm = document.createElement("span"); nm.className = "farm-res-name"; nm.textContent = rt.name;
         var inp = document.createElement("input");
         inp.type = "text"; inp.className = "farm-res-input"; inp.placeholder = "0";
-        inp.inputMode = "numeric"; // スマホで数字キーボード
-        // スクショOCRが自動入力する。読めない時は手で直してもよい（スクショ添付は必須＝証拠画像が残るので嘘防止の趣旨は維持）。2026-07-10 社長「よみとれない」対応で手入力を解禁
-        inp.addEventListener("input", function () { var cleaned = inp.value.replace(/[^\d]/g, ""); if (inp.value !== cleaned) inp.value = cleaned; updateState(); });
-        inp.title = rt.exp > 0 ? ("1個あたり " + rt.exp + " EXP（スクショから自動入力／手修正可）") : "EXPなし・実績称号の対象（スクショから自動入力／手修正可）";
+        inp.readOnly = true; // 手入力不可。スクショOCRだけが値を入れる（社長方針＝嘘防止。2026-07-10 手入力解禁は社長判断で撤回）
+        inp.title = rt.exp > 0 ? ("1個あたり " + rt.exp + " EXP（スクショから自動入力）") : "EXPなし・実績称号の対象（スクショから自動入力）";
         resInputs[rt.id] = inp;
         cell.appendChild(nm); cell.appendChild(inp);
         sub.appendChild(cell);
@@ -3195,7 +3193,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       var base = farmLogBaseExp({ resources: res });
       expHint.textContent = hasAny
         ? ("獲得EXP：+" + fmtInt(Math.round(base)))
-        : "スクショを貼ると数値が自動で入る（読めない時は手入力もOK）。全部0のままだと記録できない";
+        : "スクショを貼ると数値が自動で入る（全部0のままだと記録できない）";
       saveBtn.disabled = !pendingDataUrl || !hasAny;
     }
 
