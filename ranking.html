@@ -395,12 +395,18 @@
     return tot;
   }
   function farmLogs(m) { return Array.isArray(m.farmLogs) ? m.farmLogs : []; }
+  // rustoria成績は累積値なので、各資源は全記録の最大値（到達累積）だけを見る。合計すると同じ数値の重複記録で水増しできる（社長「同じ数値を何回も記録してずるできないように」2026-07-10・index.htmlと同値）。
+  function resourceMaxMap(m) {
+    var mx = {};
+    farmLogs(m).forEach(function (l) { var r = (l && l.resources) || {}; Object.keys(r).forEach(function (k) { var v = Number(r[k]) || 0; if (v > (mx[k] || 0)) mx[k] = v; }); });
+    return mx;
+  }
   function farmExp(m) {
-    var sum = 0;
-    farmLogs(m).forEach(function (l) { var res = (l && l.resources) || {}; RESOURCE_TYPES.forEach(function (rt) { sum += (Number(res[rt.id]) || 0) * rt.exp; }); });
+    var mx = resourceMaxMap(m), sum = 0;
+    RESOURCE_TYPES.forEach(function (rt) { sum += (Number(mx[rt.id]) || 0) * rt.exp; });
     return Math.round(sum);
   }
-  function sumIds(m, ids) { return farmLogs(m).reduce(function (a, l) { var r = (l && l.resources) || {}, s = 0; ids.forEach(function (id) { s += Number(r[id]) || 0; }); return a + s; }, 0); }
+  function sumIds(m, ids) { var mx = resourceMaxMap(m), s = 0; ids.forEach(function (id) { s += Number(mx[id]) || 0; }); return s; }
   function statValue(m, cat) {
     if (cat.stat === "__records__") return farmLogs(m).length;
     if (cat.stat === "__totalres__") return sumIds(m, RESOURCE_TYPES.map(function (rt) { return rt.id; }));

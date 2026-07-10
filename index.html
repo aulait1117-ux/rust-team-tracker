@@ -1227,11 +1227,14 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     return "シーズンをリセットしました（シーズン1）";
   };
   // メンバーの現ファーム記録を資源ID→合計に畳む（アーカイブ用・スクショは保存しない＝容量対策）。
+  // rustoriaの成績は「累積値」なので、各資源は全記録の最大値（＝到達済みの累積値）を採用する。
+  // 合計すると、同じ数値のスクショをN回記録するとN倍に水増しできてしまう（社長「同じ数値を何回も記録してずるできないように」2026-07-10）。
+  // これにより farmExp・称号・シーズンアーカイブすべてが「同じ数値の重複記録では増えない」ようになる。
   function memberResourceTotalsMap(member) {
     var totals = {};
     memberFarmLogs(member).forEach(function (l) {
       var r = (l && l.resources) || {};
-      Object.keys(r).forEach(function (k) { totals[k] = (totals[k] || 0) + (Number(r[k]) || 0); });
+      Object.keys(r).forEach(function (k) { var v = Number(r[k]) || 0; if (v > (totals[k] || 0)) totals[k] = v; });
     });
     return totals;
   }
@@ -1297,6 +1300,8 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       var a = (j.data && j.data.attributes) || {};
       var parts = [];
       if (a.players != null) parts.push("現在 <b>" + a.players + (a.maxPlayers ? "/" + a.maxPlayers : "") + "</b>人IN");
+      var lw = a.details && a.details.rust_last_wipe;
+      if (lw) { var lwd = new Date(lw); if (!isNaN(lwd.getTime())) lastWipeAtMs = lwd.getTime(); } // ワイプ後3hの取得ページ数切替に使う
       var nw = a.details && a.details.rust_next_wipe;
       if (nw) {
         var d = new Date(nw);
@@ -1812,6 +1817,14 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
   var TEAMS_POLL_MAX_MS = 300000;  // 429時のバックオフ上限
   var OFFLINE_CONFIRM_MISSES = 2;  // オンライン→OFFは「2回連続で名簿から外れたら」確定。1回の取りこぼしは許容し、ちらつき由来の誤OFF表示・レベル誤加算・IN通知の乱発を防ぐ（2026-07-10）
   var teamsPollMs = TEAMS_POLL_MIN_MS;
+  var lastWipeAtMs = null;         // BattleMetricsのrust_last_wipe（fetchServerInfoで更新）。ワイプ後3hの混雑判定に使う
+  function currentTeamsMaxPages() {
+    // ワイプ後3時間は人が殺到しオンラインがmaxPlayers(800)を大幅超過するので1500人(15ページ)取得で取りこぼしを防ぐ。
+    // それ以降は人数が落ち着くので800人(8ページ)に戻し、リクエスト数=負荷(429)を下げる（2026-07-10 社長要望）。
+    if (lastWipeAtMs == null) return 15; // ワイプ時刻が未取得のうちは安全側（多め）
+    var hoursSinceWipe = (Date.now() - lastWipeAtMs) / 3600000;
+    return hoursSinceWipe < 3 ? 15 : 8;
+  }
 
   function scheduleNextTeamsRefresh() {
     if (teamsRefreshTimer) clearTimeout(teamsRefreshTimer);
@@ -2847,17 +2860,13 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       { n: "人生を記録に捧げた男", th: 600, rk: "mythic" }, { n: "記録そのもの", th: 1500, rk: "godtier" } ] }
   ];
   function memberResourceTotal(member, statId) {
-    return memberFarmLogs(member).reduce(function (a, l) {
-      var res = (l && l.resources) || {}; return a + (Number(res[statId]) || 0);
-    }, 0);
+    return Number(memberResourceTotalsMap(member)[statId]) || 0; // 累積値なので最大値（到達点）。合計ではない（重複記録での水増し防止）
   }
-  // カテゴリの「累計値」を返す。__records__=記録回数、__totalres__=全資源合計、それ以外=その資源の累計。
+  // カテゴリの「累計値」を返す。__records__=記録回数、__totalres__=全資源合計、それ以外=その資源の累計。いずれも各資源の到達最大値ベース。
   function sumResourceIds(member, ids) {
-    return memberFarmLogs(member).reduce(function (a, l) {
-      var res = (l && l.resources) || {}, s = 0;
-      ids.forEach(function (id) { s += Number(res[id]) || 0; });
-      return a + s;
-    }, 0);
+    var totals = memberResourceTotalsMap(member), s = 0;
+    ids.forEach(function (id) { s += Number(totals[id]) || 0; });
+    return s;
   }
   var BERRY_IDS = ["yellow_berry", "red_berry", "blue_berry", "green_berry", "white_berry"];
   var CROP_IDS = ["pumpkin", "corn", "potato", "wheat"];
@@ -3038,7 +3047,12 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     var rate = teamType === "enemy" ? IN_EXP_PER_HOUR_ENEMY : IN_EXP_PER_HOUR;
     return Math.round(memberTotalOnlineMs(member) / 3600000 * rate); // 分単位で連続加算（旧: Math.floorで1時間未満が全部0＝IN時間が違っても同レベルになる不具合。2026-07-10 社長報告で修正）
   }
-  function farmExp(member) { return memberFarmLogs(member).reduce(function (a, l) { return a + farmLogExp(l); }, 0); }
+  // ファームEXP＝各資源の到達最大値（累積値）× 係数の合計。各記録を足し算しない＝同じ数値の重複記録では増えない（ずる防止・2026-07-10）。
+  function farmExp(member) {
+    var totals = memberResourceTotalsMap(member), sum = 0;
+    RESOURCE_TYPES.forEach(function (rt) { sum += (Number(totals[rt.id]) || 0) * rt.exp; });
+    return Math.round(sum);
+  }
   function memberExp(member, teamType) { return inTimeExp(member, teamType) + farmExp(member) + achievementExp(member); }
   function memberLevelInfo(member, teamType) {
     var exp = memberExp(member, teamType);
@@ -3074,6 +3088,18 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
   function recordFarm(member, resources, note, dataUrl) {
     if (!dataUrl) { toast("⚠ スクショを貼ってから記録して"); return; }
     if (!Array.isArray(member.farmLogs)) member.farmLogs = [];
+    // 累積値なので「前回までの到達最大値より1つでも増えていれば記録、どれも増えていなければ記録しない」
+    // （社長「増えていれば記録・同じ数値なら記録しない＝ずるできないように」2026-07-10）。
+    var prevMax = memberResourceTotalsMap(member);
+    var hasIncrease = false;
+    Object.keys(resources || {}).forEach(function (k) {
+      if ((Number(resources[k]) || 0) > (Number(prevMax[k]) || 0)) hasIncrease = true;
+    });
+    if (!hasIncrease) {
+      toast("前回の数値から増えていないので記録しませんでした（同じ数値の重複記録は無効）");
+      return;
+    }
+    var beforeExp = memberExp(member, "friend");
     var beforeLv = memberLevelInfo(member, "friend").level;
     var log = {
       id: makeId("farm"), ts: Date.now(), resources: resources || {},
@@ -3082,7 +3108,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     member.farmLogs.unshift(log);
     trimFarmImages(member);
     saveTeamsState();
-    var gained = farmLogExp(log);
+    var gained = Math.max(0, memberExp(member, "friend") - beforeExp); // 実際に増えたぶん（到達最大値の更新ぶん）だけをEXPとして表示
     var afterLv = memberLevelInfo(member, "friend").level;
     if (afterLv > beforeLv) {
       toast("🎉 " + member.name + " が Lv." + afterLv + " にレベルアップ！（+" + fmtInt(gained) + " EXP）");
@@ -4385,7 +4411,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
       return;
     }
     lastTeamsFetchAt = Date.now();
-    fetchOnlinePlayerPage(bmPlayersApiUrl(), [], 1, 30) // VIP予約枠等でオンラインがmaxPlayers(800)を大きく超えるサーバー対策：旧8ページ(800人)では下位のメンバーを取りこぼしOFF誤判定していた（荒川さん1200位/とーか1203位が漏れていた）。上限30ページ=3000人まで走査（nextが尽きればその手前で終了）。2026-07-10
+    fetchOnlinePlayerPage(bmPlayersApiUrl(), [], 1, currentTeamsMaxPages()) // 取得ページ数はワイプ後経過で可変：後3h=15ページ(1500人)／以降=8ページ(800人)。VIP予約枠等でワイプ直後はオンラインがmaxPlayers(800)を超え下位メンバーを取りこぼすため（荒川さん1200位/とーか1203位が漏れていた実例）。2026-07-10
       .then(function (entries) {
         var lowerNames = entries.map(function (e) { return normName(e.name); });
         lastKnownOnlineNamesLower = lowerNames;
