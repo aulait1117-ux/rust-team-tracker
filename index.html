@@ -340,6 +340,7 @@
   .farm-ocr-status { font-size: 11.5px; color: var(--text-muted); margin-top: 6px; }
   .farm-ocr-status.ok { color: var(--moss); }
   .farm-ocr-status.warn { color: var(--amber); }
+  .farm-ocr-debug { font-size: 11px; color: var(--text); background: rgba(255,255,255,0.05); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; margin-top: 6px; max-height: 160px; overflow: auto; white-space: pre-wrap; word-break: break-all; font-family: var(--font-mono); }
   .add-exp-note { margin-top: 8px; font-size: 12px; color: var(--moss); background: rgba(143,185,110,0.06); border: 1px solid var(--line-soft); border-radius: 4px; padding: 8px 12px; }
   #farm-modal-backdrop .trend-modal { max-width: min(1180px, 96vw); padding: 16px 20px; }
   #farm-modal-backdrop .trend-modal-head { margin-bottom: 8px; padding-bottom: 8px; }
@@ -3073,6 +3074,8 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     var fileInput = document.createElement("input");
     fileInput.type = "file"; fileInput.accept = "image/*"; fileInput.className = "farm-file";
     var ocrStatus = document.createElement("div"); ocrStatus.className = "farm-ocr-status"; ocrStatus.hidden = true;
+    // OCRデバッグ表示：Tesseractが実際に読み取った生テキストを見せる（読めない原因の切り分け用）。2026-07-10
+    var ocrDebug = document.createElement("pre"); ocrDebug.className = "farm-ocr-debug"; ocrDebug.hidden = true;
     // ドラッグで範囲選択できるキャンバス
     var canvasWrap = document.createElement("div"); canvasWrap.className = "farm-canvas-wrap"; canvasWrap.hidden = true;
     var canvas = document.createElement("canvas"); canvas.className = "farm-ocr-canvas";
@@ -3140,16 +3143,25 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
         ? preprocessImageRegion(srcImg, region.sx, region.sy, region.sw, region.sh)
         : preprocessImageRegion(srcImg, 0, 0, srcImg.width, srcImg.height);
       window.Tesseract.recognize(cv, "eng+jpn").then(function (res) {
-        var parsed = parseResourceOcr(res && res.data ? res.data.text : "");
+        var rawText = res && res.data ? (res.data.text || "") : "";
+        var parsed = parseResourceOcr(rawText);
         var n = 0;
         RESOURCE_TYPES.forEach(function (rt) {
           if (parsed[rt.id] != null) { resInputs[rt.id].value = parsed[rt.id]; n++; }
         });
         updateState();
-        if (n > 0) { ocrStatus.className = "farm-ocr-status ok"; ocrStatus.textContent = "✅ " + n + "項目を自動入力した。" + (region ? "" : "ズレたら対象を囲って「選択範囲だけ読み取る」。"); }
-        else { ocrStatus.className = "farm-ocr-status warn"; ocrStatus.textContent = "⚠ 読み取れなかった。対象（数字の並び）を囲って「選択範囲だけ読み取る」を試して。"; }
-      }).catch(function () {
+        if (n > 0) { ocrStatus.className = "farm-ocr-status ok"; ocrStatus.textContent = "✅ " + n + "項目を自動入力した。" + (region ? "" : "ズレたら対象を囲って「選択範囲だけ読み取る」。"); ocrDebug.hidden = true; }
+        else {
+          ocrStatus.className = "farm-ocr-status warn"; ocrStatus.textContent = "⚠ 読み取れなかった。対象の升目をドラッグで囲って「選択範囲だけ読み取る」を試して。";
+          // 原因切り分け：Tesseractが実際に読んだ生テキストを表示（空なら画像認識自体が失敗、文字化けなら前処理/言語の問題）
+          var shown = String(rawText).replace(/\s+\n/g, "\n").trim();
+          ocrDebug.textContent = "【OCRが実際に読んだ文字（開発用）】\n" + (shown ? shown.slice(0, 600) : "（空＝1文字も認識できなかった）");
+          ocrDebug.hidden = false;
+        }
+      }).catch(function (err) {
         ocrStatus.className = "farm-ocr-status warn"; ocrStatus.textContent = "⚠ 読み取りに失敗。別のスクショで試して。";
+        ocrDebug.textContent = "【OCRエラー（開発用）】\n" + String(err && err.message ? err.message : err);
+        ocrDebug.hidden = false;
       });
     }
 
@@ -3210,7 +3222,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     });
 
     body.appendChild(intro);
-    body.appendChild(shotLbl); body.appendChild(fileInput); body.appendChild(ocrStatus); body.appendChild(canvasWrap); body.appendChild(rangeBtn);
+    body.appendChild(shotLbl); body.appendChild(fileInput); body.appendChild(ocrStatus); body.appendChild(ocrDebug); body.appendChild(canvasWrap); body.appendChild(rangeBtn);
     body.appendChild(resLbl); body.appendChild(grid);
     body.appendChild(expHint);
     body.appendChild(saveBtn);
