@@ -354,6 +354,8 @@
   .farm-help-step .fh-pic { flex: none; }
   .farm-help-step .fh-pic svg { display: block; }
   @media (max-width: 560px) { .farm-help-step { flex-wrap: wrap; } .farm-help-step .fh-pic { margin-left: 31px; } }
+  .farm-res-wrap.assign-mode .farm-res-cell { cursor: pointer; border-radius: 4px; }
+  .farm-res-wrap.assign-mode .farm-res-cell:hover { outline: 2px solid var(--amber); outline-offset: 1px; background: rgba(214,171,87,0.12); }
   .add-exp-note { margin-top: 8px; font-size: 12px; color: var(--moss); background: rgba(143,185,110,0.06); border: 1px solid var(--line-soft); border-radius: 4px; padding: 8px 12px; }
   #farm-modal-backdrop .trend-modal { max-width: min(1180px, 96vw); padding: 16px 20px; }
   #farm-modal-backdrop .trend-modal-head { margin-bottom: 8px; padding-bottom: 8px; }
@@ -3079,6 +3081,8 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
 
     var pendingDataUrl = null;
     var resInputs = {};
+    // ラベルが読めない時の「タップで配置」用：OCRで読めた数字を貯め、社長が項目欄をタップして入れる（手打ちではない）。2026-07-10
+    var pendingAssign = [];
 
     var intro = document.createElement("div"); intro.className = "farm-file-note";
     intro.textContent = "数値は手入力できない（嘘防止）。rustoriaの各タブ（RESOURCES／FARMING／PVP／RAIDING等）のスクショを貼ると、AIが数値を読み取って自動入力する。タブごとに順番に貼れば全項目が合算される。読み取れない時は対象の升目をドラッグで囲って「選択範囲だけ読み取る」を使うと確実。";
@@ -3180,13 +3184,25 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
           if (parsed[rt.id] != null) { resInputs[rt.id].value = parsed[rt.id]; n++; }
         });
         updateState();
-        if (n > 0) { ocrStatus.className = "farm-ocr-status ok"; ocrStatus.textContent = "✅ " + n + "項目を自動入力した。" + (region ? "" : "ズレたら対象を囲って「選択範囲だけ読み取る」。"); ocrDebug.hidden = true; }
+        if (n > 0) { ocrStatus.className = "farm-ocr-status ok"; ocrStatus.textContent = "✅ " + n + "項目を自動入力した。" + (region ? "" : "ズレたら対象を囲って「選択範囲だけ読み取る」。"); ocrDebug.hidden = true; pendingAssign = []; grid.classList.remove("assign-mode"); }
         else {
-          ocrStatus.className = "farm-ocr-status warn"; ocrStatus.textContent = "⚠ 読み取れなかった。対象の升目をドラッグで囲って「選択範囲だけ読み取る」を試して。";
           // 原因切り分け：Tesseractが実際に読んだ生テキストを表示（空なら画像認識自体が失敗、文字化けなら前処理/言語の問題）
           var shown = String(rawText).replace(/\s+\n/g, "\n").trim();
           ocrDebug.textContent = "【OCRが実際に読んだ文字（開発用）】\n" + (shown ? shown.slice(0, 600) : "（空＝1文字も認識できなかった）");
           ocrDebug.hidden = false;
+          // ラベルは読めなくても数字が読めたら「タップで配置」に回す（ラベルの小文字OCRは苦手だが数字は読める）
+          var rawNums = (String(rawText).match(/\d[\d,]*/g) || []).map(function (s) { return ocrToInt(s); }).filter(function (v) { return v != null && v > 0; });
+          if (rawNums.length) {
+            pendingAssign = rawNums;
+            grid.classList.add("assign-mode");
+            ocrStatus.className = "farm-ocr-status";
+            ocrStatus.textContent = "👇 数字「" + rawNums.join("・") + "」は読めた。項目名が読めなかったので、入れたい項目の欄をタップして入れて（OCRで読んだ数字を配置＝手打ちではない）。";
+          } else {
+            pendingAssign = [];
+            grid.classList.remove("assign-mode");
+            ocrStatus.className = "farm-ocr-status warn";
+            ocrStatus.textContent = "⚠ 読み取れなかった。対象の升目をドラッグで囲って「選択範囲だけ読み取る」を試して。";
+          }
         }
       }).catch(function (err) {
         ocrStatus.className = "farm-ocr-status warn"; ocrStatus.textContent = "⚠ 読み取りに失敗。別のスクショで試して。";
@@ -3214,6 +3230,18 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
         inp.title = rt.exp > 0 ? ("1個あたり " + rt.exp + " EXP（スクショから自動入力）") : "EXPなし・実績称号の対象（スクショから自動入力）";
         resInputs[rt.id] = inp;
         cell.appendChild(nm); cell.appendChild(inp);
+        // タップで配置：OCRで読めた数字（pendingAssign）がある時、この欄をタップすると先頭の数字が入る
+        cell.addEventListener("click", function () {
+          if (!pendingAssign.length) return;
+          inp.value = pendingAssign.shift();
+          updateState();
+          if (pendingAssign.length) {
+            ocrStatus.className = "farm-ocr-status"; ocrStatus.textContent = "👇 残りの数字「" + pendingAssign.join("・") + "」。入れたい項目の欄をタップ。";
+          } else {
+            grid.classList.remove("assign-mode");
+            ocrStatus.className = "farm-ocr-status ok"; ocrStatus.textContent = "✅ 入れた。「このスクショで記録する」か、次のスクショを貼って。";
+          }
+        });
         sub.appendChild(cell);
       });
       grid.appendChild(sub);
