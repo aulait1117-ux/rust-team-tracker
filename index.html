@@ -356,6 +356,12 @@
   @media (max-width: 560px) { .farm-help-step { flex-wrap: wrap; } .farm-help-step .fh-pic { margin-left: 31px; } }
   .farm-res-wrap.assign-mode .farm-res-cell { cursor: pointer; border-radius: 4px; }
   .farm-res-wrap.assign-mode .farm-res-cell:hover { outline: 2px solid var(--amber); outline-offset: 1px; background: rgba(214,171,87,0.12); }
+  .farm-tab-picker { margin: 8px 0 4px; }
+  .farm-tab-picker .ftp-lead { font-size: 11.5px; color: var(--text-muted); margin-bottom: 5px; }
+  .farm-tab-picker .ftp-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .farm-tab-picker .ftp-chip { font-size: 12px; font-family: var(--font-mono); padding: 4px 11px; border-radius: 4px; border: 1px solid var(--line); background: rgba(255,255,255,0.04); color: var(--text-muted); cursor: pointer; }
+  .farm-tab-picker .ftp-chip:hover { border-color: var(--amber); color: var(--text); }
+  .farm-tab-picker .ftp-chip.on { border-color: var(--amber); background: rgba(214,171,87,0.16); color: var(--text); font-weight: 700; }
   .add-exp-note { margin-top: 8px; font-size: 12px; color: var(--moss); background: rgba(143,185,110,0.06); border: 1px solid var(--line-soft); border-radius: 4px; padding: 8px 12px; }
   #farm-modal-backdrop .trend-modal { max-width: min(1180px, 96vw); padding: 16px 20px; }
   #farm-modal-backdrop .trend-modal-head { margin-bottom: 8px; padding-bottom: 8px; }
@@ -2697,6 +2703,18 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     { id: "crates_looted",  name: "クレート",       exp: 5,    grp: "ルート" },
     { id: "barrels_broken", name: "バレル",         exp: 2,    grp: "ルート" }
   ];
+  // rustoriaの各タブ（成績画面）の項目並び順。ラベルOCRが化けても「数字だけの行」をこの順で自動割り当てできる。2026-07-10
+  // ※rustoriaの各タブは上から下・左から右にこの順で並ぶ前提。並びが違ったらタブ選択で入れ直す運用。
+  var TAB_LAYOUTS = [
+    { key: "リソース", ids: ["sulfur_ore", "metal_ore", "hq_metal_ore", "stones", "wood", "leather", "animal_fat", "bone"] },
+    { key: "農業",     ids: ["cloth", "yellow_berry", "red_berry", "blue_berry", "green_berry", "white_berry", "mushroom", "pumpkin", "corn", "potato", "wheat", "flowers", "eggs"] },
+    { key: "PVP",      ids: ["kills", "headshots", "bullets_hit", "deaths", "suicides"] },
+    { key: "モニュメント", ids: ["scientist_kills", "heavy_scientist", "bradley_kills", "heli_kills"] },
+    { key: "レイド",   ids: ["rockets", "c4_thrown", "satchels"] },
+    { key: "建築",     ids: ["blocks_placed", "blocks_upgraded"] },
+    { key: "ルート",   ids: ["crates_looted", "barrels_broken"] },
+    { key: "その他",   ids: ["scrap", "lowgrade"] }
+  ];
   function cumulativeExpForLevel(L) { return L <= 1 ? 0 : Math.round(LEVEL_EXP_K * Math.pow(L - 1, LEVEL_EXP_P)); }
   function memberFarmLogs(member) { return Array.isArray(member.farmLogs) ? member.farmLogs : []; }
   function farmLogBaseExp(log) {
@@ -3083,6 +3101,9 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     var resInputs = {};
     // ラベルが読めない時の「タップで配置」用：OCRで読めた数字を貯め、社長が項目欄をタップして入れる（手打ちではない）。2026-07-10
     var pendingAssign = [];
+    // ラベルが読めない時の「タブ順で自動割り当て」用。lastAutoNums＝直近OCRの数字、lastAppliedIds＝直近の自動割当先id（タブ切替で入れ直す時だけ消す）。
+    var lastAutoNums = [];
+    var lastAppliedIds = [];
 
     var intro = document.createElement("div"); intro.className = "farm-file-note";
     intro.textContent = "数値は手入力できない（嘘防止）。rustoriaの成績タブ（RESOURCES／FARMING／PVP等）のスクショを貼ると数字を自動で読み取る。日本語表示のままでOK。項目名まで自動で入らない時は、読めた数字を『入れたい項目の欄をタップ』して入れる（数字はOCR由来＝手打ちではない）。タブごとに順番に貼れば全項目が合算される。";
@@ -3110,6 +3131,42 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
     var ocrStatus = document.createElement("div"); ocrStatus.className = "farm-ocr-status"; ocrStatus.hidden = true;
     // OCRデバッグ表示：Tesseractが実際に読み取った生テキストを見せる（読めない原因の切り分け用）。2026-07-10
     var ocrDebug = document.createElement("pre"); ocrDebug.className = "farm-ocr-debug"; ocrDebug.hidden = true;
+    // タブ選択：ラベルが読めず数字だけ拾えた時、どのタブの並びで入れるか選ぶ（既定リソース・違えば1タップで入れ直し）
+    var tabPicker = document.createElement("div"); tabPicker.className = "farm-tab-picker"; tabPicker.hidden = true;
+    // 数字列をあるタブの項目順に流し込む。前回この関数で入れたぶん(lastAppliedIds)だけ消してから入れ直す＝他タブの合算は保持
+    function applyTabLayout(layout, nums) {
+      lastAppliedIds.forEach(function (id) { if (resInputs[id]) resInputs[id].value = ""; });
+      var filled = 0, applied = [];
+      for (var i = 0; i < layout.ids.length && i < nums.length; i++) {
+        var inp = resInputs[layout.ids[i]];
+        if (inp) { inp.value = nums[i]; applied.push(layout.ids[i]); filled++; }
+      }
+      lastAppliedIds = applied;
+      updateState();
+      return filled;
+    }
+    function showTabPicker(selIdx) {
+      tabPicker.innerHTML = "";
+      var lead = document.createElement("div"); lead.className = "ftp-lead";
+      lead.textContent = "▼ どのタブのスクショ？（違うタブを選ぶと数字を入れ直す）";
+      tabPicker.appendChild(lead);
+      var row = document.createElement("div"); row.className = "ftp-row";
+      TAB_LAYOUTS.forEach(function (layout, idx) {
+        var chip = document.createElement("button");
+        chip.type = "button"; chip.className = "ftp-chip" + (idx === selIdx ? " on" : "");
+        chip.textContent = layout.key;
+        chip.addEventListener("click", function () {
+          var f = applyTabLayout(layout, lastAutoNums);
+          showTabPicker(idx);
+          ocrStatus.className = "farm-ocr-status ok";
+          ocrStatus.textContent = "✅ 「" + layout.key + "」の順で自動入力した（" + f + "項目）。合っていれば記録、ズレは選択範囲でやり直せる。";
+        });
+        row.appendChild(chip);
+      });
+      tabPicker.appendChild(row);
+      tabPicker.hidden = false;
+    }
+    function clearTabPicker() { tabPicker.hidden = true; tabPicker.innerHTML = ""; lastAutoNums = []; lastAppliedIds = []; }
     // ドラッグで範囲選択できるキャンバス
     var canvasWrap = document.createElement("div"); canvasWrap.className = "farm-canvas-wrap"; canvasWrap.hidden = true;
     var canvas = document.createElement("canvas"); canvas.className = "farm-ocr-canvas";
@@ -3184,22 +3241,25 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
           if (parsed[rt.id] != null) { resInputs[rt.id].value = parsed[rt.id]; n++; }
         });
         updateState();
-        if (n > 0) { ocrStatus.className = "farm-ocr-status ok"; ocrStatus.textContent = "✅ " + n + "項目を自動入力した。" + (region ? "" : "ズレたら対象を囲って「選択範囲だけ読み取る」。"); ocrDebug.hidden = true; pendingAssign = []; grid.classList.remove("assign-mode"); }
+        if (n > 0) { ocrStatus.className = "farm-ocr-status ok"; ocrStatus.textContent = "✅ " + n + "項目を自動入力した。" + (region ? "" : "ズレたら対象を囲って「選択範囲だけ読み取る」。"); ocrDebug.hidden = true; pendingAssign = []; grid.classList.remove("assign-mode"); clearTabPicker(); }
         else {
           // 原因切り分け：Tesseractが実際に読んだ生テキストを表示（空なら画像認識自体が失敗、文字化けなら前処理/言語の問題）
           var shown = String(rawText).replace(/\s+\n/g, "\n").trim();
           ocrDebug.textContent = "【OCRが実際に読んだ文字（開発用）】\n" + (shown ? shown.slice(0, 600) : "（空＝1文字も認識できなかった）");
           ocrDebug.hidden = false;
-          // ラベルは読めなくても数字が読めたら「タップで配置」に回す（ラベルの小文字OCRは苦手だが数字は読める）
-          var rawNums = (String(rawText).match(/\d[\d,]*/g) || []).map(function (s) { return ocrToInt(s); }).filter(function (v) { return v != null && v > 0; });
-          if (rawNums.length) {
-            pendingAssign = rawNums;
-            grid.classList.add("assign-mode");
-            ocrStatus.className = "farm-ocr-status";
-            ocrStatus.textContent = "👇 数字「" + rawNums.join("・") + "」は読めた。項目名が読めなかったので、入れたい項目の欄をタップして入れて（OCRで読んだ数字を配置＝手打ちではない）。";
+          // ラベルは化けても「数字だけの行」は順番通り読める。数字をタブの項目順に自動割り当て（既定＝リソースタブ）。英字混じりのnoise行は除外。
+          var numLines = String(rawText).split(/\n+/).map(function (s) { return s.trim(); }).filter(function (s) { return /^[\d][\d\s,]*$/.test(s); });
+          var nums = [];
+          numLines.forEach(function (line) { (line.match(/\d[\d,]*/g) || []).forEach(function (s) { var v = ocrToInt(s); if (v != null) nums.push(v); }); });
+          pendingAssign = []; grid.classList.remove("assign-mode");
+          if (nums.length) {
+            lastAutoNums = nums; lastAppliedIds = [];
+            var filled = applyTabLayout(TAB_LAYOUTS[0], nums);
+            showTabPicker(0);
+            ocrStatus.className = "farm-ocr-status ok";
+            ocrStatus.textContent = "✅ 数字を「リソース」タブの順で自動入力した（" + filled + "項目）。別タブのスクショなら下のタブを選び直して。ズレたら選択範囲で。";
           } else {
-            pendingAssign = [];
-            grid.classList.remove("assign-mode");
+            clearTabPicker();
             ocrStatus.className = "farm-ocr-status warn";
             ocrStatus.textContent = "⚠ 読み取れなかった。対象の升目をドラッグで囲って「選択範囲だけ読み取る」を試して。";
           }
@@ -3281,7 +3341,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
 
     body.appendChild(intro);
     body.appendChild(helpBtn); body.appendChild(helpPanel);
-    body.appendChild(shotLbl); body.appendChild(fileInput); body.appendChild(ocrStatus); body.appendChild(ocrDebug); body.appendChild(canvasWrap); body.appendChild(rangeBtn);
+    body.appendChild(shotLbl); body.appendChild(fileInput); body.appendChild(ocrStatus); body.appendChild(ocrDebug); body.appendChild(tabPicker); body.appendChild(canvasWrap); body.appendChild(rangeBtn);
     body.appendChild(resLbl); body.appendChild(grid);
     body.appendChild(expHint);
     body.appendChild(saveBtn);
